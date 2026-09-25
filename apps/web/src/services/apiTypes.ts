@@ -6,6 +6,12 @@ import type { GameState, LeaderboardEntry, Friend } from '@/types/game'
 export interface CollectResult { collected: number; state: GameState }
 export interface SellResult { eggsSold: number; coinsReceived: number; state: GameState }
 export interface RewardResult { coins: number; day: number; state: GameState }
+export interface LeaderboardResult {
+  top: LeaderboardEntry[]
+  me: { rank: number; farmValue: number } | null
+  /** false — игра открыта не в Telegram, рейтинга нет. */
+  online: boolean
+}
 export interface PromoResult { coins: number; energy: number; state: GameState }
 
 export interface PlaySessionTicket {
@@ -38,8 +44,8 @@ export interface GameApi {
   claimReward(): Promise<RewardResult>
   startPlay(): Promise<PlaySessionTicket>
   finishPlay(summary: PlaySessionSummary): Promise<PlayResult>
-  leaderboard(): Promise<LeaderboardEntry[]>
-  friends(): Promise<Friend[]>
+  leaderboard(): Promise<LeaderboardResult>
+  friends(): Promise<{ friends: Friend[]; online: boolean }>
   renameFarm(name: string): Promise<GameState>
 }
 

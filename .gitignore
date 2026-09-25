@@ -21,3 +21,4 @@ apps/web/public/audio/sfx/imrove.mp3
 apps/web/public/audio/sfx/opencalendar.mp3
 apps/web/public/audio/sfx/openrating.mp3
 .wrangler/
+.dev.vars

@@ -8,6 +8,7 @@ import type { Rarity } from '@/types/game'
 import { playSound } from '@/services/audio'
 import ChickenCard from './ChickenCard.vue'
 import ChickenDetails from './ChickenDetails.vue'
+import CoinBalance from '@/components/CoinBalance.vue'
 import { t } from '@/i18n'
 
 const game = useGameStore()
@@ -49,6 +50,7 @@ const label = (f: Filter) => (f === 'all' || f === 'owned' ? t(`chickens.${f}`) 
     <div class="row">
       <h1 class="screen-title">🐔 {{ t('chickens.title') }}</h1>
       <div class="spacer" />
+      <CoinBalance />
       <span class="collected">{{ t('chickens.collected', { n: game.chickens.length, total: CHICKENS.length }) }}</span>
     </div>
 
@@ -86,6 +88,7 @@ const label = (f: Filter) => (f === 'all' || f === 'owned' ? t(`chickens.${f}`) 
 </template>
 
 <style scoped>
+.screen-title { white-space: nowrap; font-size: 20px; }
 .collected { font-size: 13px; font-weight: 900; color: var(--gold); padding: 4px 10px; border-radius: 99px; background: rgba(0, 0, 0, 0.4); }
 .filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .chip {

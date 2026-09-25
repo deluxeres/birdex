@@ -75,6 +75,9 @@ export interface GameState {
 export interface LeaderboardEntry {
   rank: number
   name: string
+  farmName?: string | null
+  level?: number
+  /** Сколько монет вложено в куриц (= XP). */
   farmValue: number
   isMe?: boolean
 }
@@ -82,5 +85,6 @@ export interface LeaderboardEntry {
 export interface Friend {
   id: string
   name: string
+  level?: number
   active: boolean
 }

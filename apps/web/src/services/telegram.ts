@@ -45,6 +45,11 @@ export function getInitData(): string {
   return tg()?.initData ?? ''
 }
 
+/** Параметр из ссылки t.me/бот/app?startapp=... (например ref_123). */
+export function getStartParam(): string | null {
+  return tg()?.initDataUnsafe.start_param ?? null
+}
+
 export function shareInviteLink(link: string, text: string): void {
   const url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`
   const app = tg()

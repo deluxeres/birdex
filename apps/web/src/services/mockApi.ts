@@ -17,7 +17,9 @@ import type { GameState } from '@/types/game'
 import { ApiError, type GameApi, type PlaySessionTicket } from './apiTypes'
 import { loadSave, writeSave } from './storage'
 import { createNewState, syncEnergy, syncDerived, addXp, clone, SAVE_VERSION } from './mockState'
-import { mockLeaderboard, mockFriends } from './mockSocial'
+import { cloudEnabled, cloudLogin, cloudSave, cloudLeaderboard, cloudFriends } from './cloud'
+import { setSaveOwner } from './storage'
+import { getTelegramUser } from './telegram'
 
 const LATENCY_MS = 120
 const wait = () => new Promise((r) => setTimeout(r, LATENCY_MS))
@@ -25,10 +27,53 @@ const wait = () => new Promise((r) => setTimeout(r, LATENCY_MS))
 let state: GameState | null = null
 let activeSession: Omit<PlaySessionTicket, 'state'> | null = null
 
+let booted: Promise<void> | null = null
+
+/** Сохранение с сервера похоже на настоящее (защита от битых/чужих данных). */
+function isValidState(s: unknown): s is GameState {
+  const g = s as GameState | null
+  return (
+    !!g &&
+    g.version === SAVE_VERSION &&
+    typeof g.balance?.coins === 'number' &&
+    typeof g.profile?.xp === 'number' &&
+    Array.isArray(g.chickens) &&
+    g.chickens.length > 0 &&
+    g.chickens.every((c) => typeof c?.key === 'string' && typeof c?.level === 'number')
+  )
+}
+
+/**
+ * Первый запуск: в Telegram входим на сервер и берём прогресс оттуда.
+ * Нет сервера / не Telegram — локальное сохранение этого устройства.
+ */
+function boot(): Promise<void> {
+  if (booted) return booted
+  booted = (async () => {
+    const tgUser = getTelegramUser()
+    setSaveOwner(tgUser ? String(tgUser.id) : null)
+    if (cloudEnabled()) {
+      try {
+        const res = await cloudLogin()
+        if (isValidState(res.state)) state = res.state
+      } catch {
+        /* сервер недоступен — играем локально, сохраним позже */
+      }
+    }
+    const s = db()
+    if (tgUser) {
+      s.profile.id = String(tgUser.id)
+      s.profile.name = tgUser.first_name || s.profile.name
+    }
+    commit()
+  })()
+  return booted
+}
+
 function db(): GameState {
   if (!state) {
     const saved = loadSave<GameState>()
-    state = saved && saved.version === SAVE_VERSION ? saved : createNewState(Date.now())
+    state = isValidState(saved) ? saved : createNewState(Date.now())
     syncDerived(state)
   }
   return state
@@ -36,15 +81,13 @@ function db(): GameState {
 
 function commit(): GameState {
   writeSave(db())
+  cloudSave(db())
   return clone(db())
-}
-
-function farmValue(s: GameState): number {
-  return s.balance.coins + s.chickens.reduce((a, c) => a + getChickenDef(c.key).price, 0)
 }
 
 export const mockApi: GameApi = {
   async me() {
+    await boot()
     await wait()
     syncEnergy(db(), Date.now())
     return commit()
@@ -216,14 +259,14 @@ export const mockApi: GameApi = {
   },
 
   async leaderboard() {
-    await wait()
-    const s = db()
-    return mockLeaderboard(s.profile.name, farmValue(s))
+    if (!cloudEnabled()) return { top: [], me: null, online: false }
+    const res = await cloudLeaderboard()
+    return { ...res, online: true }
   },
 
   async friends() {
-    await wait()
-    return mockFriends()
+    if (!cloudEnabled()) return { friends: [], online: false }
+    return { friends: await cloudFriends(), online: true }
   },
 
   async renameFarm(name) {

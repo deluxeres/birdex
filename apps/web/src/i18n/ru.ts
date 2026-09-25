@@ -86,7 +86,12 @@ export const ru = {
     next: 'Следующая через {time}',
     claimed: '+{n} 🪙',
   },
-  rating: { title: 'Рейтинг ферм', value: 'Ценность фермы', you: 'Вы' },
+  rating: {
+    title: 'Рейтинг ферм', value: 'Монет вложено в куриц', you: 'Вы',
+    offline: 'Рейтинг работает, когда игра открыта в Telegram',
+    empty: 'Пока никого нет — будь первым!',
+    error: 'Не удалось загрузить рейтинг',
+  },
   friends: {
     title: 'Друзья',
     count: 'Ваша стая: {n}',
@@ -94,6 +99,11 @@ export const ru = {
     invite: 'Пригласить друга',
     inviteText: 'Заходи на мою куриную ферму в BIRDEX!',
     activeLabel: 'активен', inactiveLabel: 'ещё не начал',
+    yourId: 'Твой ID (реферальный код)',
+    copyLink: 'Ссылка',
+    copied: 'Ссылка-приглашение скопирована',
+    empty: 'Пока никого — пригласи друзей по своей ссылке',
+    offline: 'Друзья работают, когда игра открыта в Telegram',
   },
   settings: {
     title: 'Настройки',

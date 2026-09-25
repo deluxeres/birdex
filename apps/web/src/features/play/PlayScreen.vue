@@ -149,7 +149,7 @@ watch(s.lives, (now, before) => {
 </template>
 
 <style scoped>
-.play { position: relative; z-index: 1; height: calc(100dvh - 110px); min-height: 520px; }
+.play { position: relative; z-index: 1; flex: 1; min-height: 480px; }
 .stats { padding: 10px 12px; font-weight: 900; gap: 12px; }
 .eggs { display: inline-flex; align-items: center; gap: 4px; }
 .lives { display: inline-flex; gap: 2px; font-size: 20px; }
