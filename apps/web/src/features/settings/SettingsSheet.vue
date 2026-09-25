@@ -7,6 +7,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { playSound } from '@/services/audio'
 import BottomSheet from '@/components/BottomSheet.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
+import PromoCode from './PromoCode.vue'
 import { t } from '@/i18n'
 
 const ui = useUiStore()
@@ -89,6 +90,8 @@ function previewSound() {
       <div class="spacer" />
       <input id="opt-haptics" v-model="settings.haptics" type="checkbox" />
     </label>
+
+    <PromoCode />
   </BottomSheet>
 </template>
 

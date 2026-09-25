@@ -14,7 +14,7 @@ import PrimaryButton from '@/components/PrimaryButton.vue'
 import FloatingReward from '@/components/FloatingReward.vue'
 import EnergyPanel from './EnergyPanel.vue'
 import SnowFall from '@/components/effects/SnowFall.vue'
-import { formatNumber } from '@/economy/format'
+import { formatNumber, formatCompact } from '@/economy/format'
 import { useUiStore } from '@/stores/ui'
 import { playSound } from '@/services/audio'
 import { haptics } from '@/services/haptics'
@@ -52,7 +52,7 @@ function onTap(id: number, golden: boolean, ev: PointerEvent) {
   const rect = field.value.getBoundingClientRect()
   const ice = reward < 0
   floats.value.push({
-    id: fid++, text: ice ? '❄ ×' + ECONOMY.play.iceSlowFactor : `+${reward}`, gold: golden, egg: !ice,
+    id: fid++, text: ice ? '❄ ×' + ECONOMY.play.iceSlowFactor : `+${formatCompact(reward)}`, gold: golden, egg: !ice,
     x: ev.clientX - rect.left, y: ev.clientY - rect.top,
   })
 }
@@ -79,7 +79,7 @@ watch(s.lives, (now, before) => {
   <GameBackground :src="bgSrc" :dim="0.3" />
   <div class="screen play">
     <div class="card stats row">
-      <span class="eggs"><EggIcon :size="22" /> {{ running ? s.score.value : formatNumber(game.balance?.eggs ?? 0) }}</span>
+      <span class="eggs"><EggIcon :size="22" /> {{ running ? formatNumber(s.score.value) : formatNumber(game.balance?.eggs ?? 0) }}</span>
       <div class="spacer" />
       <span v-if="running" class="lives" :class="{ hurt: s.hurt.value }" @animationend="s.hurt.value = false">
         <span v-for="i in ECONOMY.play.lives" :key="i" class="life" :class="{ lost: i > s.lives.value }">❤️</span>
@@ -119,7 +119,7 @@ watch(s.lives, (now, before) => {
 
       <div v-if="!running" class="overlay">
         <template v-if="s.phase.value === 'result'">
-          <div class="big">{{ t('play.earned', { n: s.lastResult.value }) }}</div>
+          <div class="big">{{ t('play.earned', { n: formatNumber(s.lastResult.value) }) }}</div>
           <div class="muted">{{ t('play.caught') }}: {{ s.caught.value }}</div>
         </template>
         <template v-else-if="s.phase.value === 'finishing' || s.phase.value === 'starting'">
@@ -128,6 +128,9 @@ watch(s.lives, (now, before) => {
         <template v-else>
           <div class="big">{{ t('play.title') }}</div>
           <div class="muted hint">{{ t('play.hint', { lives: ECONOMY.play.lives }) }}</div>
+          <div class="value">
+            {{ t('play.eggValue', { n: formatNumber(s.eggValue.value), level: game.profile?.level ?? 1 }) }}
+          </div>
         </template>
 
         <div
@@ -146,7 +149,7 @@ watch(s.lives, (now, before) => {
 </template>
 
 <style scoped>
-.play { position: relative; z-index: 1; height: calc(100dvh - 110px); min-height: 520px; }
+.play { position: relative; z-index: 1; flex: 1; min-height: 480px; }
 .stats { padding: 10px 12px; font-weight: 900; gap: 12px; }
 .eggs { display: inline-flex; align-items: center; gap: 4px; }
 .lives { display: inline-flex; gap: 2px; font-size: 20px; }
@@ -245,4 +248,8 @@ watch(s.lives, (now, before) => {
 .big { font-size: 32px; font-weight: 900; }
 .no-energy :deep(.btn) { filter: saturate(0.5) brightness(0.8); }
 .hint { max-width: 280px; }
+.value {
+  padding: 6px 14px; border-radius: 99px; font-weight: 900; font-size: 14px;
+  background: rgba(0, 0, 0, 0.45); border: 2px solid var(--gold-dark); color: var(--gold);
+}
 </style>

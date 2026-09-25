@@ -34,8 +34,3 @@ export function accumulatedEggs(params: {
   const free = Math.max(0, storageCapacity - eggsInStorage)
   return Math.min(produced, free)
 }
-
-/** Вместимость склада: 8 ч производства, но не меньше минимума. */
-export function storageCapacityFor(perHour: number): number {
-  return Math.max(ECONOMY.minStorageCapacity, Math.ceil(perHour * ECONOMY.offlineCapHours))
-}

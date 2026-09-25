@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { chickenProduction, accumulatedEggs, storageCapacityFor } from './production'
+import { chickenProduction, accumulatedEggs } from './production'
+import { storageCapacity, storageUpgradeCost, STORAGE_MAX_LEVEL } from './storage'
+import { xpForLevel, levelForXp, referencePerHour, playEggValue } from './progression'
 import { currentEnergy, energyMaxForLevel, energyUpgradeCost, ENERGY_MAX_LEVEL, msUntilPlayable } from './energy'
 import { spawnIntervalMs, fallDurationMs } from './playDifficulty'
 import { CHICKENS } from '@/config/chickens'
@@ -23,9 +25,15 @@ describe('production', () => {
     expect(chickenProduction('farm_hen', 2)).toBe(36)
     expect(chickenProduction('farm_hen', 15)).toBe(385)
   })
-  it('storage fits 8h of production', () => {
-    expect(storageCapacityFor(30)).toBe(1000)
-    expect(storageCapacityFor(500)).toBe(4000)
+  it('storage upgrades 1 000 → 50 000 000', () => {
+    expect(storageCapacity(0)).toBe(1000)
+    expect(storageCapacity(STORAGE_MAX_LEVEL)).toBe(50_000_000)
+    expect(STORAGE_MAX_LEVEL).toBe(29)
+    for (let l = 0; l < STORAGE_MAX_LEVEL; l++) {
+      expect(storageCapacity(l + 1)).toBeGreaterThan(storageCapacity(l))
+      expect(storageUpgradeCost(l + 1) >= storageUpgradeCost(l)).toBe(true)
+    }
+    expect(storageUpgradeCost(0)).toBe(700)
   })
   it('offline cap is 8 hours', () => {
     const eggs = accumulatedEggs({
@@ -47,6 +55,9 @@ describe('production', () => {
   })
   it('energy regen is capped', () => {
     expect(currentEnergy({ energy: 900, energyMax: 1000, energyUpdatedAt: 0, now: 99 * H })).toBe(1000)
+  })
+  it('bonus energy above max is kept', () => {
+    expect(currentEnergy({ energy: 500, energyMax: 300, energyUpdatedAt: 0, now: 8 * H })).toBe(500)
   })
   it('energy fully refills in 8h', () => {
     expect(currentEnergy({ energy: 0, energyMax: 300, energyUpdatedAt: 0, now: 4 * H })).toBe(150)
@@ -109,6 +120,24 @@ describe('reward (days by New York time)', () => {
   })
   it('amount clamps to last day', () => {
     expect(rewardAmount(99)).toBe(2000)
+  })
+})
+
+describe('player level & play value', () => {
+  it('level grows with coins spent, capped at 50', () => {
+    expect(levelForXp(0)).toBe(1)
+    expect(levelForXp(xpForLevel(2))).toBe(2)
+    expect(levelForXp(1e12)).toBe(50)
+  })
+  it('reference farm grows with spending', () => {
+    expect(referencePerHour(0)).toBe(30)
+    expect(referencePerHour(1e7)).toBeGreaterThan(referencePerHour(1e5))
+  })
+  it('play egg value: hand-set for levels 1–10, then grows with the farm', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(playEggValue)).toEqual([1, 2, 2, 2, 3, 3, 4, 5, 5, 7])
+    for (let l = 11; l <= 50; l++) expect(playEggValue(l)).toBeGreaterThan(playEggValue(l - 1))
+    const expected = Math.round((referencePerHour(xpForLevel(30)) * 0.85) / 30)
+    expect(playEggValue(30)).toBeGreaterThanOrEqual(expected)
   })
 })
 

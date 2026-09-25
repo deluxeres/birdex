@@ -20,6 +20,7 @@ import RewardSheet from '@/features/rewards/RewardSheet.vue'
 import RatingSheet from '@/features/social/RatingSheet.vue'
 import FriendsSheet from '@/features/social/FriendsSheet.vue'
 import SettingsSheet from '@/features/settings/SettingsSheet.vue'
+import LevelUpBanner from '@/components/effects/LevelUpBanner.vue'
 import { t } from '@/i18n'
 
 const game = useGameStore()
@@ -68,8 +69,9 @@ onUnmounted(() => {
   </div>
 
   <div v-else class="shell">
-    <div class="scroller">
-      <GameHeader />
+    <div class="scroller" :class="{ 'no-header': ui.tab !== 'farm' }">
+      <!-- Шапка (профиль, монеты, календарь, рейтинг, друзья) — только на Ферме. -->
+      <GameHeader v-if="ui.tab === 'farm'" />
       <main>
         <component :is="SCREENS[ui.tab]" />
       </main>
@@ -82,6 +84,7 @@ onUnmounted(() => {
     <FriendsSheet />
     <SettingsSheet />
     <ToastLayer />
+    <LevelUpBanner />
   </div>
 </template>
 
@@ -105,5 +108,7 @@ onUnmounted(() => {
 }
 /* main занимает всё место под шапкой — экраны могут растягиваться на полную высоту. */
 main { flex: 1 0 auto; display: flex; flex-direction: column; }
+/* Без шапки экран начинается сразу под системной панелью телефона. */
+.no-header :deep(.screen) { padding-top: calc(var(--safe-top) + 12px); }
 .scroller::-webkit-scrollbar { display: none; }
 </style>

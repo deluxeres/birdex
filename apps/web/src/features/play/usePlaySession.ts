@@ -6,6 +6,7 @@ import { ref, computed, onUnmounted } from 'vue'
 import { ECONOMY } from '@/config/economy'
 import { comboMultiplier } from '@/economy/combo'
 import { spawnIntervalMs, fallDurationMs } from '@/economy/playDifficulty'
+import { playEggValue } from '@/economy/progression'
 import { api, ApiError } from '@/services/api'
 import { useGameStore } from '@/stores/game'
 import { useUiStore } from '@/stores/ui'
@@ -60,7 +61,11 @@ export function usePlaySession() {
 
   const caught = computed(() => normalCaught.value + goldenCaught.value)
   const combo = computed(() => comboMultiplier(streak.value))
-  const score = computed(() => normalCaught.value * P.normalReward + goldenCaught.value * P.goldenReward)
+  /** Сколько яиц даёт одно пойманное яйцо (растёт с уровнем игрока). */
+  const eggValue = computed(() => playEggValue(game.profile?.level ?? 1))
+  const score = computed(
+    () => (normalCaught.value * P.normalReward + goldenCaught.value * P.goldenReward) * eggValue.value,
+  )
 
   // Следующее яйцо планируется по текущей сложности — чем больше поймал, тем чаще.
   function scheduleSpawn() {
@@ -122,7 +127,7 @@ export function usePlaySession() {
       normalCaught.value++
       playSound('eggCatch', 0.6, 0.08)
     }
-    return egg.kind === 'golden' ? P.goldenReward : P.normalReward
+    return (egg.kind === 'golden' ? P.goldenReward : P.normalReward) * eggValue.value
   }
 
   /** Заморозка: всё в 3 раза медленнее на 10 сек (повторная — продлевает). */
@@ -217,7 +222,7 @@ export function usePlaySession() {
   })
 
   return {
-    phase, eggs, lives, hurt, timeScale, frozenLeft, caught, normalCaught, goldenCaught, combo, score, lastResult,
+    phase, eggs, lives, hurt, timeScale, frozenLeft, caught, normalCaught, goldenCaught, combo, score, eggValue, lastResult,
     start, finish, catchEgg, eggLanded,
   }
 }

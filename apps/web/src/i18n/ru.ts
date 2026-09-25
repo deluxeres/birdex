@@ -12,7 +12,8 @@ export const ru = {
     collect: 'Собрать',
     perHour: '{n} яиц / час',
     storage: 'Склад',
-    storageFull: 'Склад полон',
+    storageFull: 'Склад полон — улучши его!',
+    storageMaxed: 'Склад максимальный',
     chooseChicken: 'Выбрать курицу',
     onFarm: 'На ферме',
     nothingYet: 'Яйца ещё не накопились',
@@ -36,6 +37,7 @@ export const ru = {
     tries: 'Попыток: {n}',
     energyInfo: 'Попытка стоит {cost} ⚡. Энергия полностью восстанавливается за {hours} ч.',
     energyMaxed: 'Энергия прокачана до максимума',
+    eggValue: '1 пойманное яйцо = {n} 🥚 · ур. {level}',
   },
 
   chickens: {
@@ -84,7 +86,12 @@ export const ru = {
     next: 'Следующая через {time}',
     claimed: '+{n} 🪙',
   },
-  rating: { title: 'Рейтинг ферм', value: 'Ценность фермы', you: 'Вы' },
+  rating: {
+    title: 'Рейтинг ферм', value: 'Монет вложено в куриц', you: 'Вы',
+    offline: 'Рейтинг работает, когда игра открыта в Telegram',
+    empty: 'Пока никого нет — будь первым!',
+    error: 'Не удалось загрузить рейтинг',
+  },
   friends: {
     title: 'Друзья',
     count: 'Ваша стая: {n}',
@@ -92,6 +99,11 @@ export const ru = {
     invite: 'Пригласить друга',
     inviteText: 'Заходи на мою куриную ферму в BIRDEX!',
     activeLabel: 'активен', inactiveLabel: 'ещё не начал',
+    yourId: 'Твой ID (реферальный код)',
+    copyLink: 'Ссылка',
+    copied: 'Ссылка-приглашение скопирована',
+    empty: 'Пока никого — пригласи друзей по своей ссылке',
+    offline: 'Друзья работают, когда игра открыта в Telegram',
   },
   settings: {
     title: 'Настройки',
@@ -99,7 +111,12 @@ export const ru = {
     save: 'Сохранить',
     sound: 'Звуки', music: 'Музыка', haptics: 'Вибрация',
     volume: 'Громкость',
+    promoTitle: 'Бонус-код',
+    promoPlaceholder: 'Введите код',
+    promoApply: 'Активировать',
+    promoSuccess: 'Код активирован: {reward}',
   },
+  levelUp: { title: 'Уровень повышен', level: 'Уровень {n}!' },
   common: { close: 'Закрыть', loading: 'Загрузка фермы…' },
   errors: {
     NOT_ENOUGH_COINS: 'Не хватает монет',
@@ -112,6 +129,8 @@ export const ru = {
     NO_ENERGY: 'Недостаточно энергии',
     BAD_SESSION: 'Сессия устарела',
     BAD_NAME: 'Введите название',
+    CODE_INVALID: 'Такого кода нет',
+    CODE_USED: 'Этот код уже активирован',
     UNKNOWN: 'Что-то пошло не так',
   },
 }

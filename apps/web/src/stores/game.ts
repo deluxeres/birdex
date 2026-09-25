@@ -132,7 +132,7 @@ export const useGameStore = defineStore('game', () => {
     const res = await run(`upgrade:${id}`, () => api.upgradeChicken(id))
     if (!res) return false
     state.value = res
-    playSound('upgrade')
+    playSound('improve')
     haptics.success()
     return true
   }
@@ -144,6 +144,24 @@ export const useGameStore = defineStore('game', () => {
     playSound('buyEnergy')
     haptics.success()
     return true
+  }
+
+  async function upgradeStorage() {
+    const res = await run('storage', () => api.upgradeStorage())
+    if (!res) return false
+    state.value = res
+    playSound('buyEnergy')
+    haptics.success()
+    return true
+  }
+
+  async function redeemCode(code: string) {
+    const res = await run('promo', () => api.redeemCode(code))
+    if (!res) return null
+    state.value = res.state
+    playSound('reward')
+    haptics.success()
+    return { coins: res.coins, energy: res.energy }
   }
 
   async function displayChicken(id: string) {
@@ -172,7 +190,7 @@ export const useGameStore = defineStore('game', () => {
   return {
     state, loading, pending, now,
     profile, balance, chickens, perHour, displayedChicken, readyToCollect, energy,
-    ownsChicken, load, refresh, collect, sellEggs, buyChicken, upgradeChicken, upgradeEnergy,
+    ownsChicken, load, refresh, collect, sellEggs, buyChicken, upgradeChicken, upgradeEnergy, upgradeStorage, redeemCode,
     displayChicken, claimReward, renameFarm, applyState, stopClock,
   }
 })

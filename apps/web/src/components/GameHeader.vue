@@ -2,7 +2,7 @@
 // Верх экрана: название фермы, уровень, монеты, яйца + кнопки Награда/Рейтинг/Друзья/Настройки.
 import { useGameStore } from '@/stores/game'
 import { useUiStore } from '@/stores/ui'
-import { xpForLevel } from '@/services/mockState'
+import { levelProgress } from '@/economy/progression'
 import ResourcePill from './ResourcePill.vue'
 import EggIcon from './EggIcon.vue'
 import DailyRewardTile from './DailyRewardTile.vue'
@@ -32,7 +32,7 @@ function open(sheet: SheetId, sound: 'openPanel' | 'openCalendar' | 'settings') 
         <div class="info">
           <div class="farm-name">{{ game.profile?.farmName }}</div>
           <div class="lvl">{{ t('header.level', { n: game.profile?.level ?? 1 }) }}</div>
-          <ProgressBar :value="game.profile?.xp ?? 0" :max="xpForLevel(game.profile?.level ?? 1)" />
+          <ProgressBar :value="levelProgress(game.profile?.xp ?? 0)" :max="1" />
         </div>
       </button>
       <div class="pills">

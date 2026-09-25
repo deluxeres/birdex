@@ -7,3 +7,18 @@ dist/
 .DS_Store
 .idea/workspace.xml
 .idea/shelf/
+
+# Исходники картинок и звуков (в игре используются обработанные .webp / .mp3)
+apps/web/public/assets/**/*.png
+apps/web/public/audio/sfx/buychiken.mp3
+apps/web/public/audio/sfx/buyenergy.mp3
+apps/web/public/audio/sfx/chikenfx.mp3
+apps/web/public/audio/sfx/claim.mp3
+apps/web/public/audio/sfx/click1.mp3
+apps/web/public/audio/sfx/eggplay.mp3
+apps/web/public/audio/sfx/error2.mp3
+apps/web/public/audio/sfx/imrove.mp3
+apps/web/public/audio/sfx/opencalendar.mp3
+apps/web/public/audio/sfx/openrating.mp3
+.wrangler/
+.dev.vars

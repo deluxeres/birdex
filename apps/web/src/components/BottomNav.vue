@@ -59,5 +59,12 @@ function go(id: TabId) {
 .icon { font-size: 22px; line-height: 1; height: 28px; display: flex; align-items: center; justify-content: center; }
 .label { font-size: 11px; font-weight: 800; }
 .item.active { background: linear-gradient(180deg, #ffcf5a, var(--gold)); color: #4a2a05; box-shadow: 0 3px 0 var(--gold-dark); }
-.item.play:not(.active) .icon { animation: bob 2.4s ease-in-out infinite; }
+/* Все иконки слегка покачиваются, каждая со своей задержкой — "живое" меню. */
+.icon { animation: bob 2.4s ease-in-out infinite; }
+.item:nth-child(2) .icon { animation-delay: -0.4s; }
+.item:nth-child(3) .icon { animation-delay: -0.8s; }
+.item:nth-child(4) .icon { animation-delay: -1.2s; }
+.item:nth-child(5) .icon { animation-delay: -1.6s; }
+.item:nth-child(6) .icon { animation-delay: -2s; }
+@media (prefers-reduced-motion: reduce) { .icon { animation: none; } }
 </style>

@@ -70,6 +70,10 @@ export const SOUNDS = {
   settings: '/audio/sfx/settings.mp3',
   /** Покупка улучшения энергии в Play. */
   buyEnergy: '/audio/sfx/buy_energy.mp3',
+  /** Улучшение курицы во вкладке Курочки. */
+  improve: '/audio/sfx/improve.mp3',
+  /** Повышение уровня игрока. */
+  lvlup: '/audio/sfx/lvlup.mp3',
 } as const
 
 export const MUSIC = {

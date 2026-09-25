@@ -2,7 +2,8 @@
 
 import { ECONOMY } from '@/config/economy'
 import { STARTER_CHICKEN_KEY } from '@/config/chickens'
-import { farmProductionPerHour, storageCapacityFor } from '@/economy/production'
+import { storageCapacity } from '@/economy/storage'
+import { levelForXp } from '@/economy/progression'
 import { currentEnergy, energyMaxForLevel } from '@/economy/energy'
 import type { GameState } from '@/types/game'
 import { getTelegramUser } from './telegram'
@@ -26,11 +27,13 @@ export function createNewState(now: number): GameState {
       eggs: 0,
       energy: ECONOMY.energy.start,
       energyMax: ECONOMY.energy.start,
-      storageCapacity: ECONOMY.minStorageCapacity,
+      storageCapacity: ECONOMY.storage.start,
     },
     chickens: [{ id: starterId, key: STARTER_CHICKEN_KEY, level: 1, acquiredAt: now }],
     displayedChickenId: starterId,
     energyLevel: 0,
+    storageLevel: 0,
+    redeemedCodes: [],
     lastProductionAt: now,
     energyUpdatedAt: now,
     reward: { streakDay: 0, lastClaimAt: null },
@@ -40,9 +43,12 @@ export function createNewState(now: number): GameState {
   return state
 }
 
-/** Пересчитать то, что зависит от куриц и прокачки: склад и максимум энергии. */
+/** Пересчитать то, что зависит от прокачки: склад и максимум энергии. */
 export function syncDerived(state: GameState): void {
-  state.balance.storageCapacity = storageCapacityFor(farmProductionPerHour(state.chickens))
+  state.storageLevel ??= 0 // старые сохранения без склада
+  state.redeemedCodes ??= []
+  state.profile.level = levelForXp(state.profile.xp)
+  state.balance.storageCapacity = storageCapacity(state.storageLevel)
   state.balance.energyMax = energyMaxForLevel(state.energyLevel)
 }
 
@@ -57,16 +63,10 @@ export function syncEnergy(state: GameState, now: number): void {
   state.energyUpdatedAt = now
 }
 
-export function addXp(state: GameState, amount: number): void {
-  state.profile.xp += amount
-  while (state.profile.xp >= xpForLevel(state.profile.level)) {
-    state.profile.xp -= xpForLevel(state.profile.level)
-    state.profile.level += 1
-  }
-}
-
-export function xpForLevel(level: number): number {
-  return 100 + level * 50
+/** XP = монеты, потраченные на куриц (покупка и улучшение). Уровень считается из общего XP. */
+export function addXp(state: GameState, coinsSpent: number): void {
+  state.profile.xp += Math.max(0, Math.round(coinsSpent))
+  state.profile.level = levelForXp(state.profile.xp)
 }
 
 export const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T

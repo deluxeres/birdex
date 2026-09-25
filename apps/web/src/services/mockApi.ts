@@ -10,11 +10,16 @@ import { sellValue } from '@/economy/market'
 import { rewardStatus, effectiveStreakDay, rewardAmount } from '@/economy/reward'
 import { maxPlausibleEggs } from '@/economy/playDifficulty'
 import { energyUpgradeCost, ENERGY_MAX_LEVEL } from '@/economy/energy'
+import { storageUpgradeCost, STORAGE_MAX_LEVEL } from '@/economy/storage'
+import { playEggValue } from '@/economy/progression'
+import { findPromo, normalizeCode } from '@/config/promo'
 import type { GameState } from '@/types/game'
 import { ApiError, type GameApi, type PlaySessionTicket } from './apiTypes'
 import { loadSave, writeSave } from './storage'
 import { createNewState, syncEnergy, syncDerived, addXp, clone, SAVE_VERSION } from './mockState'
-import { mockLeaderboard, mockFriends } from './mockSocial'
+import { cloudEnabled, cloudLogin, cloudSave, cloudLeaderboard, cloudFriends } from './cloud'
+import { setSaveOwner } from './storage'
+import { getTelegramUser } from './telegram'
 
 const LATENCY_MS = 120
 const wait = () => new Promise((r) => setTimeout(r, LATENCY_MS))
@@ -22,10 +27,53 @@ const wait = () => new Promise((r) => setTimeout(r, LATENCY_MS))
 let state: GameState | null = null
 let activeSession: Omit<PlaySessionTicket, 'state'> | null = null
 
+let booted: Promise<void> | null = null
+
+/** Сохранение с сервера похоже на настоящее (защита от битых/чужих данных). */
+function isValidState(s: unknown): s is GameState {
+  const g = s as GameState | null
+  return (
+    !!g &&
+    g.version === SAVE_VERSION &&
+    typeof g.balance?.coins === 'number' &&
+    typeof g.profile?.xp === 'number' &&
+    Array.isArray(g.chickens) &&
+    g.chickens.length > 0 &&
+    g.chickens.every((c) => typeof c?.key === 'string' && typeof c?.level === 'number')
+  )
+}
+
+/**
+ * Первый запуск: в Telegram входим на сервер и берём прогресс оттуда.
+ * Нет сервера / не Telegram — локальное сохранение этого устройства.
+ */
+function boot(): Promise<void> {
+  if (booted) return booted
+  booted = (async () => {
+    const tgUser = getTelegramUser()
+    setSaveOwner(tgUser ? String(tgUser.id) : null)
+    if (cloudEnabled()) {
+      try {
+        const res = await cloudLogin()
+        if (isValidState(res.state)) state = res.state
+      } catch {
+        /* сервер недоступен — играем локально, сохраним позже */
+      }
+    }
+    const s = db()
+    if (tgUser) {
+      s.profile.id = String(tgUser.id)
+      s.profile.name = tgUser.first_name || s.profile.name
+    }
+    commit()
+  })()
+  return booted
+}
+
 function db(): GameState {
   if (!state) {
     const saved = loadSave<GameState>()
-    state = saved && saved.version === SAVE_VERSION ? saved : createNewState(Date.now())
+    state = isValidState(saved) ? saved : createNewState(Date.now())
     syncDerived(state)
   }
   return state
@@ -33,15 +81,13 @@ function db(): GameState {
 
 function commit(): GameState {
   writeSave(db())
+  cloudSave(db())
   return clone(db())
-}
-
-function farmValue(s: GameState): number {
-  return s.balance.coins + s.chickens.reduce((a, c) => a + getChickenDef(c.key).price, 0)
 }
 
 export const mockApi: GameApi = {
   async me() {
+    await boot()
     await wait()
     syncEnergy(db(), Date.now())
     return commit()
@@ -60,7 +106,6 @@ export const mockApi: GameApi = {
     })
     s.balance.eggs += collected
     s.lastProductionAt = now
-    addXp(s, Math.ceil(collected / 20))
     return { collected, state: commit() }
   },
 
@@ -73,7 +118,6 @@ export const mockApi: GameApi = {
     const coins = sellValue(eggs)
     s.balance.eggs -= eggs
     s.balance.coins += coins
-    addXp(s, Math.ceil(eggs / 25))
     return { eggsSold: eggs, coinsReceived: coins, state: commit() }
   },
 
@@ -88,7 +132,7 @@ export const mockApi: GameApi = {
     s.balance.coins -= def.price
     s.chickens.push({ id: `c_${Date.now()}`, key, level: 1, acquiredAt: Date.now() })
     syncDerived(s)
-    addXp(s, 50)
+    addXp(s, def.price)
     return commit()
   },
 
@@ -105,7 +149,7 @@ export const mockApi: GameApi = {
     s.balance.coins -= cost
     chicken.level += 1
     syncDerived(s)
-    addXp(s, 25)
+    addXp(s, cost)
     return commit()
   },
 
@@ -120,8 +164,41 @@ export const mockApi: GameApi = {
     s.energyLevel += 1
     syncDerived(s)
     // +50 к максимуму сразу добавляет и +50 к текущей энергии
-    s.balance.energy = Math.min(s.balance.energyMax, s.balance.energy + ECONOMY.energy.upgradeStep)
+    // бонусная энергия сверх максимума не срезается
+    s.balance.energy = Math.max(s.balance.energy, Math.min(s.balance.energyMax, s.balance.energy + ECONOMY.energy.upgradeStep))
     return commit()
+  },
+
+  async upgradeStorage() {
+    await wait()
+    const s = db()
+    if (s.storageLevel >= STORAGE_MAX_LEVEL) throw new ApiError('MAX_LEVEL')
+    const cost = storageUpgradeCost(s.storageLevel)
+    if (s.balance.coins < cost) throw new ApiError('NOT_ENOUGH_COINS')
+    // Сначала собираем то, что упёрлось в старый склад.
+    await mockApi.collect()
+    s.balance.coins -= cost
+    s.storageLevel += 1
+    syncDerived(s)
+    return commit()
+  },
+
+  async redeemCode(raw) {
+    await wait()
+    const s = db()
+    const promo = findPromo(raw)
+    if (!promo) throw new ApiError('CODE_INVALID')
+    const code = normalizeCode(raw)
+    if (s.redeemedCodes.includes(code)) throw new ApiError('CODE_USED')
+    s.redeemedCodes.push(code)
+    const coins = promo.coins ?? 0
+    const energy = promo.energy ?? 0
+    s.balance.coins += coins
+    if (energy > 0) {
+      syncEnergy(s, Date.now())
+      s.balance.energy += energy
+    }
+    return { coins, energy, state: commit() }
   },
 
   async displayChicken(chickenId) {
@@ -171,25 +248,25 @@ export const mockApi: GameApi = {
     const caught = summary.normalCaught + summary.goldenCaught
     const plausible = maxPlausibleEggs(duration)
     const ratio = caught > 0 ? Math.min(1, plausible / caught) : 0
+    // Цена яйца в Play зависит от уровня игрока (см. economy/progression).
     const raw =
-      summary.normalCaught * ECONOMY.play.normalReward +
-      summary.goldenCaught * ECONOMY.play.goldenReward
+      (summary.normalCaught * ECONOMY.play.normalReward + summary.goldenCaught * ECONOMY.play.goldenReward) *
+      playEggValue(s.profile.level)
     const free = Math.max(0, s.balance.storageCapacity - s.balance.eggs)
     const eggsAwarded = Math.max(0, Math.min(Math.floor(raw * ratio), free))
     s.balance.eggs += eggsAwarded
-    addXp(s, Math.ceil(eggsAwarded / 10))
     return { eggsAwarded, state: commit() }
   },
 
   async leaderboard() {
-    await wait()
-    const s = db()
-    return mockLeaderboard(s.profile.name, farmValue(s))
+    if (!cloudEnabled()) return { top: [], me: null, online: false }
+    const res = await cloudLeaderboard()
+    return { ...res, online: true }
   },
 
   async friends() {
-    await wait()
-    return mockFriends()
+    if (!cloudEnabled()) return { friends: [], online: false }
+    return { friends: await cloudFriends(), online: true }
   },
 
   async renameFarm(name) {

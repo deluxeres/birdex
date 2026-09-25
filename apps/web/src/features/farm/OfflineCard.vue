@@ -4,6 +4,7 @@ import { useGameStore } from '@/stores/game'
 import PrimaryButton from '@/components/PrimaryButton.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 import EggIcon from '@/components/EggIcon.vue'
+import StorageUpgrade from './StorageUpgrade.vue'
 import { formatNumber } from '@/economy/format'
 import { useUiStore } from '@/stores/ui'
 import { playSound } from '@/services/audio'
@@ -50,7 +51,13 @@ async function collect() {
       </div>
     </div>
     <div class="storage">
-      <span class="muted small">{{ t('farm.storage') }}</span>
+      <div class="row">
+        <span class="muted small">
+          {{ t('farm.storage') }} · {{ formatNumber(game.balance?.eggs ?? 0) }} / {{ formatNumber(game.balance?.storageCapacity ?? 0) }}
+        </span>
+        <div class="spacer" />
+        <StorageUpgrade />
+      </div>
       <ProgressBar
         :value="game.balance?.eggs ?? 0"
         :max="game.balance?.storageCapacity ?? 1"
