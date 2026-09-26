@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { formatNumber } from '@/economy/format'
+import { formatCompact, formatNumber } from '@/economy/format'
 
-defineProps<{ icon?: string; value: number; max?: number; plus?: boolean }>()
+const props = defineProps<{ icon?: string; value: number; max?: number; plus?: boolean; compact?: boolean }>()
 defineEmits<{ plus: [] }>()
+
+function formatValue(value: number): string {
+  return props.compact ? formatCompact(value) : formatNumber(value)
+}
 </script>
 
 <template>
   <div class="pill">
     <span class="icon"><slot name="icon">{{ icon }}</slot></span>
     <span class="value">
-      {{ formatNumber(value) }}<span v-if="max !== undefined" class="max"> / {{ formatNumber(max) }}</span>
+      {{ formatValue(value) }}<span v-if="max !== undefined" class="max"> / {{ formatValue(max) }}</span>
     </span>
     <button v-if="plus" class="plus" @click="$emit('plus')">+</button>
   </div>

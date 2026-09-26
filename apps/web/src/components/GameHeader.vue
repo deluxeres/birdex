@@ -44,10 +44,10 @@ function open(sheet: SheetId, sound: 'openPanel' | 'openCalendar' | 'settings') 
         </div>
       </div>
       <div class="pills">
-        <ResourcePill :value="game.balance?.coins ?? 0" plus @plus="ui.setTab('market')">
+        <ResourcePill :value="game.balance?.coins ?? 0" compact plus @plus="ui.setTab('market')">
           <template #icon><CoinIcon :size="22" /></template>
         </ResourcePill>
-        <ResourcePill :value="game.balance?.eggs ?? 0" :max="game.balance?.storageCapacity">
+        <ResourcePill :value="game.balance?.eggs ?? 0" :max="game.balance?.storageCapacity" compact>
           <template #icon><EggIcon :size="22" /></template>
         </ResourcePill>
       </div>

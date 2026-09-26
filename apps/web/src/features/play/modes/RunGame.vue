@@ -2,7 +2,7 @@
 // Chicken Flight: виртуальные яйца -> серверная сессия -> collect/crash решает API.
 // Сцена: случайный фон crash1..3 (чуть заблюрен), жёлтый график множителя, курица летит по линии,
 // снизу её подталкивает оранжевый "ветер". Оси растут вместе с полётом.
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRunGame } from './useRunGame'
 import { useGameStore } from '@/stores/game'
 import { ASSETS } from '@/config/assets'
@@ -24,9 +24,24 @@ const busy = computed(() => g.state.value === 'FLYING' || g.state.value === 'COL
 const flying = computed(() => g.state.value === 'FLYING' || g.state.value === 'COLLECTING')
 const net = computed(() => g.settledReward.value - g.settledAmount.value)
 const X_PRESETS = [1.5, 2, 3, 5]
+const targetMultiplierInput = ref(String(g.targetMultiplier.value))
 
 function fmtX(v: number) {
   return `${v.toFixed(2)}x`
+}
+
+function setTargetMultiplierInput(value: string) {
+  targetMultiplierInput.value = value
+  g.setTargetMultiplier(value)
+}
+
+function normalizeTargetMultiplierInput() {
+  targetMultiplierInput.value = String(g.targetMultiplier.value)
+}
+
+function setTargetMultiplierPreset(value: number) {
+  targetMultiplierInput.value = String(value)
+  g.setTargetMultiplier(value)
 }
 
 function back() {
@@ -199,8 +214,19 @@ onMounted(g.loadActive)
           </button>
         </div>
         <div class="label">AUTO COLLECT X</div>
+        <label class="x-box">
+          <input
+            :value="targetMultiplierInput"
+            inputmode="decimal"
+            aria-label="Auto collect multiplier"
+            :disabled="busy"
+            @input="setTargetMultiplierInput(($event.target as HTMLInputElement).value)"
+            @blur="normalizeTargetMultiplierInput"
+          />
+          <span>x</span>
+        </label>
         <div class="chips">
-          <button v-for="x in X_PRESETS" :key="x" :class="{ on: g.targetMultiplier.value === x }" :disabled="busy" @click="g.setTargetMultiplier(x)">
+          <button v-for="x in X_PRESETS" :key="x" :class="{ on: g.targetMultiplier.value === x }" :disabled="busy" @click="setTargetMultiplierPreset(x)">
             {{ x }}x
           </button>
         </div>
@@ -387,6 +413,15 @@ h1, p { margin: 0; }
 .amount-box input {
   width: 100%; max-width: 120px; min-width: 0; border: 0; outline: 0; text-align: center;
   color: var(--warm-white); background: transparent; font: inherit; font-size: 26px; font-weight: 1000;
+}
+.x-box {
+  height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  border-radius: 12px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 220, 150, 0.16); padding: 0 12px;
+  color: var(--gold); font-size: 22px; font-weight: 1000;
+}
+.x-box input {
+  width: 96px; min-width: 0; border: 0; outline: 0; text-align: right;
+  color: var(--warm-white); background: transparent; font: inherit; font-variant-numeric: tabular-nums;
 }
 .chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .chips button {

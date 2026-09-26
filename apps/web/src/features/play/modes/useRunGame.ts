@@ -65,7 +65,7 @@ export function useRunGame() {
   }
 
   function setTargetMultiplier(v: string | number) {
-    const n = Number(v)
+    const n = typeof v === 'string' ? Number(v.replace(',', '.')) : Number(v)
     if (!Number.isFinite(n)) return
     targetMultiplier.value = Math.max(1.01, Math.min(CHICKEN_FLIGHT.maxMultiplier, Math.floor(n * 100) / 100))
   }

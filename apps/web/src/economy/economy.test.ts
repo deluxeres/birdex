@@ -11,6 +11,7 @@ import { sellValue, eggsForPercent, clampSellAmount } from './market'
 import { rewardStatus, effectiveStreakDay, rewardAmount } from './reward'
 import { comboMultiplier } from './combo'
 import { msUntilNextDay } from './dayClock'
+import { formatCompact } from './format'
 
 const H = 3_600_000
 
@@ -153,5 +154,12 @@ describe('combo', () => {
     expect(comboMultiplier(0)).toBe(1)
     expect(comboMultiplier(5)).toBe(2)
     expect(comboMultiplier(100)).toBe(5)
+  })
+})
+
+describe('format', () => {
+  it('uses compact russian suffixes for large balances', () => {
+    expect(formatCompact(150000)).toBe('150к')
+    expect(formatCompact(1250000)).toBe('1.25м')
   })
 })

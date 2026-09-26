@@ -3,10 +3,10 @@ export function formatNumber(n: number): string {
   return Math.floor(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
 }
 
-/** 1250000 -> "1.25M" для узких мест. */
+/** 150000 -> "150к" для узких мест. */
 export function formatCompact(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2).replace(/\.?0+$/, '')}M`
-  if (n >= 10_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2).replace(/\.?0+$/, '')}м`
+  if (n >= 10_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}к`
   return formatNumber(n)
 }
 
