@@ -4,9 +4,9 @@ import { ECONOMY } from '@/config/economy'
 import { currentEnergy, energyMaxForLevel, ENERGY_MAX_LEVEL } from './energy'
 
 /** Все режимы в меню Play. puzzle и hunt пока закрыты ("скоро"). */
-export type PlayMode = 'catch' | 'fox' | 'run' | 'puzzle' | 'hunt'
+export type PlayMode = 'catch' | 'fox' | 'run' | 'double' | 'puzzle' | 'hunt'
 /** Режимы со своей отдельной энергией (у "Ловли яиц" — основная энергия). */
-export type ExtraMode = 'fox' | 'run'
+export type ExtraMode = 'fox' | 'run' | 'double'
 
 export interface ModeEnergy {
   energy: number
@@ -15,7 +15,7 @@ export interface ModeEnergy {
   level?: number
 }
 
-export const EXTRA_MODES: ExtraMode[] = ['fox', 'run']
+export const EXTRA_MODES: ExtraMode[] = ['fox', 'run', 'double']
 
 export function modeConfig(mode: ExtraMode) {
   return ECONOMY.modes[mode]
@@ -26,6 +26,7 @@ export function freshModeEnergy(now: number): Record<ExtraMode, ModeEnergy> {
   return {
     fox: { energy: ECONOMY.energy.start, updatedAt: now, level: 0 },
     run: { energy: ECONOMY.energy.start, updatedAt: now, level: 0 },
+    double: { energy: ECONOMY.energy.start, updatedAt: now, level: 0 },
   }
 }
 

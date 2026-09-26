@@ -21,7 +21,7 @@ export interface FriendsResult {
   total: number
   online: boolean
 }
-export interface PromoResult { coins: number; energy: number; energyMode?: 'catch' | 'fox' | 'run'; state: GameState }
+export interface PromoResult { coins: number; energy: number; energyMode?: 'catch' | 'fox' | 'run' | 'double'; state: GameState }
 
 export interface PlaySessionTicket {
   sessionId: string
@@ -93,6 +93,30 @@ export interface ChickenFlightCollectResult {
   history: ChickenFlightHistoryEntry[]
 }
 
+export type DoubleBet = 'red' | 'black' | 'green'
+
+export interface DoubleHistoryEntry {
+  id: string
+  bet: DoubleBet
+  slot: number
+  color: DoubleBet
+  amount: number
+  reward: number
+  createdAt: number
+}
+
+export interface DoubleSpinResult {
+  id: string
+  slot: number
+  color: DoubleBet
+  win: boolean
+  amount: number
+  bet: DoubleBet
+  reward: number
+  state: GameState
+  history: DoubleHistoryEntry[]
+}
+
 export interface GameApi {
   me(): Promise<GameState>
   collect(): Promise<CollectResult>
@@ -112,10 +136,12 @@ export interface GameApi {
   chickenFlightActive(): Promise<ChickenFlightActiveResult>
   chickenFlightStart(amount: number): Promise<ChickenFlightStartResult>
   chickenFlightCollect(sessionId: string): Promise<ChickenFlightCollectResult>
+  doubleHistory(): Promise<{ history: DoubleHistoryEntry[] }>
+  doubleSpin(amount: number, bet: DoubleBet): Promise<DoubleSpinResult>
   leaderboard(kind: RatingKind): Promise<LeaderboardResult>
   friends(): Promise<FriendsResult>
   claimReferral(): Promise<{ coins: number; state: GameState }>
-  claimInviteTask(target: 5 | 10 | 25): Promise<{ coins: number; birdPoints?: number; state: GameState }>
+  claimInviteTask(target: 5 | 10 | 25 | 100): Promise<{ coins: number; birdPoints?: number; state: GameState }>
   verifyChannelSubscription(): Promise<{ subscribed: boolean; state: GameState }>
   claimChannelBonus(): Promise<{ coins: number; state: GameState }>
   renameFarm(name: string): Promise<GameState>

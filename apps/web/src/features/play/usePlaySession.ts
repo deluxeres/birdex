@@ -147,7 +147,7 @@ export function usePlaySession() {
     }
   }
 
-  /** Заморозка: всё в 3 раза медленнее на 10 сек (повторная — продлевает). */
+  /** Заморозка: всё на 10% медленнее (iceSlowFactor) на 10 сек, повторная — продлевает. */
   function freeze() {
     playSound('ice', 0.8)
     haptics.medium()

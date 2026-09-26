@@ -11,6 +11,8 @@ import { haptics } from '@/services/haptics'
 import { useShake } from '@/composables/useShake'
 import { t } from '@/i18n'
 
+/** compact — только новая вместимость (для узкой плашки на панели фермы). */
+const props = defineProps<{ compact?: boolean }>()
 const game = useGameStore()
 const ui = useUiStore()
 const { shaking, shake } = useShake()
@@ -44,7 +46,8 @@ function upgrade() {
     @animationend="shaking = false"
   >
     <span class="arrow">⬆</span>
-    <span>{{ formatCompact(game.balance?.storageCapacity ?? 0) }} → {{ formatCompact(next) }}</span>
+    <span v-if="props.compact">{{ formatCompact(next) }}</span>
+    <span v-else>{{ formatCompact(game.balance?.storageCapacity ?? 0) }} → {{ formatCompact(next) }}</span>
     <span class="price"><CoinIcon :size="16" /> {{ formatCompact(cost) }}</span>
   </button>
 </template>

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import FarmBackdrop from '@/components/FarmBackdrop.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
+import BirdPointsIcon from '@/components/BirdPointsIcon.vue'
 import { formatNumber } from '@/economy/format'
 import { formatSeasonLeft, seasonRank, seasonTopPercent, SEASON_MS } from '@/economy/season'
 import { useGameStore } from '@/stores/game'
@@ -22,7 +23,7 @@ const elapsed = computed(() => SEASON_MS - leftMs.value)
 
     <section class="card hero">
       <div class="season-id">{{ t('season.seasonN', { n: game.season?.id ?? 1 }) }}</div>
-      <div class="points">💎 {{ formatNumber(points) }}</div>
+      <div class="points"><BirdPointsIcon :size="40" /> {{ formatNumber(points) }}</div>
       <div class="muted">{{ t('season.eligibility') }}</div>
       <ProgressBar :value="elapsed" :max="SEASON_MS" color="var(--gold)" />
       <div class="row meta">
@@ -47,7 +48,7 @@ const elapsed = computed(() => SEASON_MS - leftMs.value)
       <div>🥚 EGGS</div>
       <div>🪙 COINS</div>
       <div>📈 FARM GROWTH</div>
-      <div>💎 BIRD POINTS</div>
+      <div class="bp-row"><BirdPointsIcon :size="18" /> BIRD POINTS</div>
       <div>🏆 SNAPSHOT</div>
       <div>$BIRD rewards</div>
     </section>
@@ -60,6 +61,8 @@ const elapsed = computed(() => SEASON_MS - leftMs.value)
 </template>
 
 <style scoped>
+.points { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.bp-row { display: inline-flex; align-items: center; gap: 4px; }
 .season { position: relative; z-index: 1; gap: 10px; }
 .hero { padding: 14px; display: flex; flex-direction: column; gap: 9px; }
 .season-id { font-size: 12px; font-weight: 900; color: var(--text-secondary); }

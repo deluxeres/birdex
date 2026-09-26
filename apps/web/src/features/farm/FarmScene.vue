@@ -37,7 +37,7 @@ let happyTimer: number | undefined
 function poke(ev: PointerEvent) {
   const rect = scene.value?.getBoundingClientRect()
   if (rect) hearts.value?.burst(ev.clientX - rect.left, ev.clientY - rect.top)
-  playSound('cluck', 0.7, 0.06)
+  playSound('chickenFarm', 0.7, 0.06)
   haptics.light()
   // Перезапуск анимации прыжка даже при частых тапах.
   happy.value = false

@@ -1,155 +1,238 @@
 <script setup lang="ts">
 // Chicken Flight: виртуальные яйца -> серверная сессия -> collect/crash решает API.
+// Сцена: случайный фон crash1..3 (чуть заблюрен), жёлтый график множителя, курица летит по линии,
+// снизу её подталкивает оранжевый "ветер". Оси растут вместе с полётом.
 import { computed, onMounted } from 'vue'
 import { useRunGame } from './useRunGame'
 import { useGameStore } from '@/stores/game'
+import { ASSETS } from '@/config/assets'
+import { flightElapsedForMultiplier, flightMultiplierAt } from '@/economy/chickenFlight'
 import { formatNumber } from '@/economy/format'
 import EggIcon from '@/components/EggIcon.vue'
 import ChickenAvatar from '@/components/ChickenAvatar.vue'
-import PrimaryButton from '@/components/PrimaryButton.vue'
+import EnergyIcon from '@/components/EnergyIcon.vue'
+import { ECONOMY } from '@/config/economy'
 
 const emit = defineEmits<{ back: [] }>()
 const game = useGameStore()
 const g = useRunGame()
 
+const bg = ASSETS.crashBackgrounds[Math.floor(Math.random() * ASSETS.crashBackgrounds.length)]
 const chickenKey = computed(() => game.displayedChicken?.key ?? game.chickens?.[0]?.key ?? 'farm_hen')
-const statusTitle = computed(() => {
-  if (g.state.value === 'COLLECTED') return 'SUCCESS!'
-  if (g.state.value === 'CRASHED') return 'CRASHED'
-  if (g.state.value === 'COLLECTING') return 'COLLECTING...'
-  if (g.state.value === 'STARTING') return 'READY...'
-  return 'CHICKEN FLIGHT'
-})
-const net = computed(() => g.settledReward.value - g.settledAmount.value)
 
-function fmtMultiplier(v: number) {
+const busy = computed(() => g.state.value === 'FLYING' || g.state.value === 'COLLECTING' || g.state.value === 'STARTING')
+const flying = computed(() => g.state.value === 'FLYING' || g.state.value === 'COLLECTING')
+const net = computed(() => g.settledReward.value - g.settledAmount.value)
+const X_PRESETS = [1.5, 2, 3, 5]
+
+function fmtX(v: number) {
   return `${v.toFixed(2)}x`
 }
 
 function back() {
-  if (g.state.value === 'FLYING' || g.state.value === 'COLLECTING' || g.state.value === 'STARTING') return
+  if (busy.value) return
   emit('back')
 }
+
+// ---------- График ----------
+const VW = 340
+const VH = 250
+const PL = 34 // слева место под подписи x
+const PR = 22
+const PT = 74 // сверху место под большой множитель
+const PB = 26
+const plotW = VW - PL - PR
+const plotH = VH - PT - PB
+
+/** Прошедшие секунды полёта (для завершённого — секунды до множителя, на котором закончился). */
+const seconds = computed(() => flightElapsedForMultiplier(g.currentMultiplier.value) / 1000)
+
+function niceStep(raw: number) {
+  for (const s of [0.5, 1, 2, 5, 10, 20, 25, 50]) if (raw <= s) return s
+  return 100
+}
+
+const tMax = computed(() => Math.max(20, Math.ceil((seconds.value * 1.15) / 5) * 5))
+const mMax = computed(() => Math.max(4, Math.ceil(g.currentMultiplier.value * 1.3)))
+const yStep = computed(() => niceStep((mMax.value - 1) / 4))
+const xStep = computed(() => Math.max(5, niceStep(tMax.value / 4)))
+
+const sx = (t: number) => PL + (t / tMax.value) * plotW
+const sy = (m: number) => PT + plotH - ((m - 1) / (mMax.value - 1)) * plotH
+
+const yTicks = computed(() => {
+  const out: number[] = []
+  for (let m = 1; m <= mMax.value + 1e-6; m += yStep.value) out.push(Math.round(m * 100) / 100)
+  return out
+})
+const xTicks = computed(() => {
+  const out: number[] = []
+  for (let t = 0; t <= tMax.value + 1e-6; t += xStep.value) out.push(t)
+  return out
+})
+
+/** Точки кривой от 0 до текущего времени. */
+const curve = computed(() => {
+  const s = seconds.value
+  const n = 48
+  const pts: [number, number][] = []
+  for (let i = 0; i <= n; i++) {
+    const t = (s * i) / n
+    pts.push([sx(t), sy(i === n ? g.currentMultiplier.value : flightMultiplierAt(t * 1000))])
+  }
+  return pts
+})
+const linePath = computed(() => curve.value.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' '))
+const areaPath = computed(() => {
+  const pts = curve.value
+  const last = pts[pts.length - 1]
+  return `${linePath.value} L${last[0].toFixed(1)} ${(PT + plotH).toFixed(1)} L${PL} ${PT + plotH} Z`
+})
+/** Точки на линии в моменты делений по времени. */
+const dots = computed(() => xTicks.value.filter((t) => t > 0 && t < seconds.value).map((t) => [sx(t), sy(flightMultiplierAt(t * 1000))]))
+
+const tip = computed(() => curve.value[curve.value.length - 1])
+const tipStyle = computed(() => ({
+  left: (tip.value[0] / VW) * 100 + '%',
+  top: (tip.value[1] / VH) * 100 + '%',
+}))
+
+const bigClass = computed(() => ({
+  crashed: g.state.value === 'CRASHED',
+  won: g.state.value === 'COLLECTED',
+  hot: g.currentMultiplier.value >= 5,
+}))
+
+/** Лента сверху: текущий множитель (жёлтый) + прошлые полёты. */
+const strip = computed(() => {
+  const items = g.history.value.map((h) => ({
+    id: h.id,
+    x: h.multiplier,
+    // Краш — красный, забрал — зелёный, забрал от 2.5x — золотой.
+    kind: h.status === 'CRASHED' ? 'lost' : h.multiplier >= 2.5 ? 'gold' : 'won',
+  }))
+  if (flying.value) items.unshift({ id: 'now', x: g.currentMultiplier.value, kind: 'now' })
+  return items.slice(0, 9)
+})
 
 onMounted(g.loadActive)
 </script>
 
 <template>
-  <div class="screen flight" :class="[`zone-${g.zone.value}`, { flying: g.state.value === 'FLYING', crashed: g.state.value === 'CRASHED' }]">
+  <div class="screen flight" :class="{ flying, crashed: g.state.value === 'CRASHED' }">
+    <div class="bgimg" :style="{ backgroundImage: `url(${bg})` }" />
+    <div class="bgdim" />
+
     <div class="topbar">
-      <button class="back" :disabled="g.state.value === 'FLYING' || g.state.value === 'COLLECTING' || g.state.value === 'STARTING'" @click="back">‹</button>
-      <div>
-        <h1>{{ statusTitle }}</h1>
+      <button class="back" :disabled="busy" @click="back">‹</button>
+      <div class="ttl">
+        <h1>CHICKEN FLIGHT</h1>
         <p>Virtual Eggs only</p>
       </div>
-      <span class="balance"><EggIcon :size="18" /> {{ formatNumber(g.balance.value) }}</span>
+      <span class="balance"><EggIcon :size="20" /> {{ formatNumber(g.balance.value) }}</span>
+    </div>
+
+    <div v-if="strip.length" class="strip">
+      <b v-for="h in strip" :key="h.id" :class="h.kind">{{ fmtX(h.x) }}</b>
     </div>
 
     <section class="scene">
-      <div class="layer stars" />
-      <div class="layer clouds one" />
-      <div class="layer clouds two" />
-      <div class="moon">◐</div>
-      <div class="farm-strip">
-        <span>🌾</span><span>🏡</span><span>🌾</span><span>🌳</span><span>🌾</span>
-      </div>
+      <div class="scene-bg" :style="{ backgroundImage: `url(${bg})` }" />
+      <svg class="chart" :viewBox="`0 0 ${VW} ${VH}`" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="cf-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffd23f" stop-opacity="0.32" />
+            <stop offset="1" stop-color="#ffd23f" stop-opacity="0" />
+          </linearGradient>
+        </defs>
+        <line v-for="m in yTicks" :key="'gy' + m" class="grid" :x1="PL" :x2="VW - PR" :y1="sy(m)" :y2="sy(m)" />
+        <line v-for="t in xTicks" :key="'gx' + t" class="grid" :x1="sx(t)" :x2="sx(t)" :y1="PT" :y2="PT + plotH" />
+        <line class="axis" :x1="PL" :x2="PL" :y1="PT - 10" :y2="PT + plotH" />
+        <line class="axis" :x1="PL" :x2="VW - PR + 6" :y1="PT + plotH" :y2="PT + plotH" />
+        <circle v-for="m in yTicks" :key="'ty' + m" class="tick" :cx="PL" :cy="sy(m)" r="2.2" />
+        <circle v-for="t in xTicks" :key="'tx' + t" class="tick" :cx="sx(t)" :cy="PT + plotH" r="2.2" />
+        <path class="area" :d="areaPath" />
+        <path class="line-glow" :d="linePath" />
+        <path class="line" :d="linePath" />
+        <circle v-for="(d, i) in dots" :key="'d' + i" class="dot" :cx="d[0]" :cy="d[1]" r="3.6" />
+        <circle class="dot" :cx="PL" :cy="sy(1)" r="3.6" />
+        <circle class="dot tipdot" :cx="tip[0]" :cy="tip[1]" r="4.6" />
+      </svg>
 
-      <div class="multiplier" :class="{ hot: g.currentMultiplier.value >= 5, space: g.currentMultiplier.value >= 10 }">
-        {{ fmtMultiplier(g.currentMultiplier.value) }}
-      </div>
-      <div v-if="g.milestone.value" class="milestone">{{ g.milestone.value }}</div>
+      <span v-for="m in yTicks" :key="'ly' + m" class="ylab" :style="{ top: (sy(m) / VH) * 100 + '%', right: (1 - (PL - 6) / VW) * 100 + '%' }">{{ m }}x</span>
+      <span v-for="t in xTicks" :key="'lx' + t" class="xlab" :style="{ left: (sx(t) / VW) * 100 + '%' }">{{ t }}s</span>
 
-      <div class="chicken-wrap">
-        <div class="flame left" />
-        <ChickenAvatar :chicken-key="chickenKey" :size="116" idle />
-        <div class="rocket">🚀</div>
-        <div class="flame right" />
-      </div>
+      <div class="mult" :class="bigClass">{{ fmtX(g.currentMultiplier.value) }}</div>
+      <div v-if="g.state.value === 'CRASHED'" class="big-sub lost">CRASHED</div>
+      <div v-else-if="g.state.value === 'COLLECTED'" class="big-sub won">+{{ formatNumber(net) }} <EggIcon :size="20" /></div>
+      <div v-else-if="g.milestone.value" class="big-sub ms">{{ g.milestone.value }}</div>
 
-      <div v-if="g.state.value === 'CRASHED'" class="crash-burst">💥</div>
-      <div v-if="g.state.value === 'COLLECTED'" class="success-burst">+{{ formatNumber(net) }}</div>
+      <div class="bird" :style="tipStyle" :class="{ fall: g.state.value === 'CRASHED' }">
+        <div v-if="flying" class="wind">
+          <i v-for="n in 12" :key="n" :style="{ '--i': n }" />
+        </div>
+        <div class="bird-img"><ChickenAvatar :chicken-key="chickenKey" :size="70" :idle="false" /></div>
+      </div>
     </section>
 
-    <section v-if="g.state.value === 'IDLE' || g.state.value === 'STARTING'" class="panel setup">
-      <div class="label">RUN AMOUNT</div>
-      <div class="amount-box">
-        <button @click="g.step(-25)">−</button>
-        <label>
-          <EggIcon :size="22" />
-          <input
-            :value="g.amount.value"
-            inputmode="numeric"
-            pattern="[0-9]*"
-            aria-label="Run amount"
-            @input="g.setCustomAmount(($event.target as HTMLInputElement).value)"
-          />
-        </label>
-        <button @click="g.step(25)">+</button>
-      </div>
-      <div class="presets">
-        <button v-for="p in g.CONFIG.presets" :key="p" :class="{ on: g.amount.value === p }" :disabled="p > g.balance.value" @click="g.setAmount(p)">
-          {{ p }}
-        </button>
-      </div>
-      <div class="label collect-label">AUTO COLLECT X</div>
-      <div class="x-box">
-        <label>
-          <input
-            :value="g.targetMultiplier.value"
-            inputmode="decimal"
-            aria-label="Auto collect multiplier"
-            @input="g.setTargetMultiplier(($event.target as HTMLInputElement).value)"
-          />
-          <b>x</b>
-        </label>
-        <div class="x-presets">
-          <button v-for="x in [1.5, 2, 3, 5]" :key="x" :class="{ on: g.targetMultiplier.value === x }" @click="g.setTargetMultiplier(x)">
+    <section class="panel">
+      <template v-if="!flying">
+        <div class="label">RUN AMOUNT</div>
+        <div class="amount-box">
+          <button class="sq" :disabled="busy" @click="g.step(-25)">−</button>
+          <label>
+            <EggIcon :size="24" />
+            <input
+              :value="g.amount.value"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              aria-label="Run amount"
+              :disabled="busy"
+              @input="g.setCustomAmount(($event.target as HTMLInputElement).value)"
+            />
+          </label>
+          <button class="sq" :disabled="busy" @click="g.step(25)">+</button>
+        </div>
+        <div class="chips">
+          <button v-for="p in g.CONFIG.presets" :key="p" :class="{ on: g.amount.value === p }" :disabled="busy || p > g.balance.value" @click="g.setAmount(p)">
+            {{ p }}
+          </button>
+        </div>
+        <div class="label">AUTO COLLECT X</div>
+        <div class="chips">
+          <button v-for="x in X_PRESETS" :key="x" :class="{ on: g.targetMultiplier.value === x }" :disabled="busy" @click="g.setTargetMultiplier(x)">
             {{ x }}x
           </button>
         </div>
-      </div>
-      <div class="returns">
-        <span>{{ g.targetMultiplier.value.toFixed(2) }}x → {{ formatNumber(Math.floor(g.amount.value * g.targetMultiplier.value)) }}</span>
-        <span>5x → {{ formatNumber(g.amount.value * 5) }}</span>
-        <span>10x → {{ formatNumber(g.amount.value * 10) }}</span>
-      </div>
-      <PrimaryButton :disabled="!g.canLaunch.value || g.state.value === 'STARTING'" @click="g.launch">
-        ▶ PLAY · 🚀 LAUNCH
-      </PrimaryButton>
-      <p v-if="g.amount.value > g.balance.value" class="blocked">
-        Need at least {{ formatNumber(g.amount.value) }} eggs to launch.
-      </p>
-      <p v-else-if="g.balance.value < g.CONFIG.minAmount" class="blocked">
-        Need at least {{ formatNumber(g.CONFIG.minAmount) }} eggs to play.
-      </p>
-    </section>
 
-    <section v-else-if="g.state.value === 'FLYING' || g.state.value === 'COLLECTING'" class="panel active">
-      <div class="run-stats">
-        <span>RUN <b><EggIcon :size="16" /> {{ formatNumber(g.amount.value) }}</b></span>
-        <span>CURRENT <b><EggIcon :size="16" /> {{ formatNumber(g.currentReward.value) }}</b></span>
-      </div>
-      <PrimaryButton :disabled="g.state.value === 'COLLECTING'" @click="g.collect">
-        COLLECT {{ formatNumber(g.currentReward.value) }} 🥚
-      </PrimaryButton>
-    </section>
+        <button
+          v-if="g.state.value === 'COLLECTED' || g.state.value === 'CRASHED'"
+          class="gold-btn"
+          @click="g.playAgain"
+        >
+          {{ g.state.value === 'COLLECTED' ? 'PLAY AGAIN' : 'TRY AGAIN' }}
+        </button>
+        <button v-else class="gold-btn" :disabled="!g.canLaunch.value || g.state.value === 'STARTING'" @click="g.launch">
+          <EggIcon :size="30" /> PLAY {{ formatNumber(g.amount.value) }}
+          <span class="en-cost"><EnergyIcon mode="run" color="#ffc629" :size="16" />{{ ECONOMY.modes.run.playCost }}</span>
+        </button>
+        <p v-if="g.state.value === 'IDLE' && g.amount.value > g.balance.value" class="blocked">
+          Need at least {{ formatNumber(g.amount.value) }} eggs to launch.
+        </p>
+        <p v-else-if="g.state.value === 'IDLE' && g.balance.value < g.CONFIG.minAmount" class="blocked">
+          Need at least {{ formatNumber(g.CONFIG.minAmount) }} eggs to play.
+        </p>
+      </template>
 
-    <section v-else class="panel result">
-      <h2>{{ g.state.value === 'COLLECTED' ? 'SUCCESS!' : 'CRASHED' }}</h2>
-      <div class="result-line">{{ fmtMultiplier(g.settledMultiplier.value) }}</div>
-      <p v-if="g.state.value === 'COLLECTED'">
-        🥚 {{ formatNumber(g.settledAmount.value) }} → 🥚 {{ formatNumber(g.settledReward.value) }}
-      </p>
-      <p v-else>Run: -{{ formatNumber(g.settledAmount.value) }} 🥚</p>
-      <strong v-if="g.state.value === 'COLLECTED'" class="profit">+{{ formatNumber(net) }} Eggs</strong>
-      <PrimaryButton @click="g.playAgain">{{ g.state.value === 'COLLECTED' ? 'PLAY AGAIN' : 'TRY AGAIN' }}</PrimaryButton>
-    </section>
-
-    <section v-if="g.state.value === 'IDLE' && g.history.value.length" class="history">
-      <span>RECENT FLIGHTS</span>
-      <b v-for="h in g.history.value" :key="h.id" :class="{ lost: h.status === 'CRASHED' }">
-        {{ fmtMultiplier(h.multiplier) }}
-      </b>
+      <template v-else>
+        <div class="run-stats">
+          <span>RUN <b><EggIcon :size="18" /> {{ formatNumber(g.amount.value) }}</b></span>
+          <span>AUTO <b>{{ g.targetMultiplier.value }}x</b></span>
+        </div>
+        <button class="gold-btn huge" :disabled="g.state.value === 'COLLECTING'" @click="g.collect">
+          <EggIcon :size="34" /> COLLECT {{ formatNumber(g.currentReward.value) }}
+        </button>
+      </template>
     </section>
   </div>
 </template>
@@ -159,181 +242,181 @@ onMounted(g.loadActive)
   position: relative; z-index: 1; flex: 1; min-height: 0; gap: 8px;
   padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 14px); overflow: visible;
 }
+.flying { padding-bottom: calc(var(--safe-bottom) + 14px); }
+/* Фон режима: случайный crash1..3, чуть заблюрен. */
+.bgimg {
+  position: fixed; inset: -12px; z-index: -2; background-size: cover; background-position: center bottom;
+  filter: blur(6px) brightness(0.7); transform: scale(1.05);
+}
+.bgdim { position: fixed; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(10, 6, 3, 0.25), rgba(10, 6, 3, 0.55)); }
+
 .topbar {
-  display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 8px;
-  padding: 8px 10px; border-radius: 14px;
-  background: rgba(34, 22, 12, 0.78); border: 1px solid rgba(255, 221, 150, 0.18);
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 16px;
+  background: linear-gradient(180deg, rgba(58, 36, 18, 0.92), rgba(34, 21, 11, 0.94));
+  border: 2px solid rgba(160, 108, 52, 0.7); box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
 }
 .back {
-  width: 34px; height: 34px; border-radius: 10px; color: var(--gold); font-size: 28px; line-height: 1;
-  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 220, 150, 0.18);
+  width: 36px; height: 36px; border-radius: 10px; color: #3a2108; font-size: 26px; font-weight: 900; line-height: 1;
+  background: linear-gradient(180deg, #ffe17a, var(--gold)); box-shadow: 0 3px 0 var(--gold-dark);
 }
-.back:disabled { opacity: 0.35; }
-h1, h2, p { margin: 0; }
-h1 { font-size: 18px; font-weight: 900; color: var(--warm-white); }
-.topbar p { font-size: 11px; color: var(--text-secondary); }
-.balance { display: inline-flex; align-items: center; gap: 4px; font-weight: 900; color: var(--gold); }
+.back:disabled { opacity: 0.4; }
+h1, p { margin: 0; }
+.ttl h1 { white-space: nowrap; font-size: 18px; font-weight: 1000; letter-spacing: 0.5px; color: var(--warm-white); }
+.ttl p { font-size: 11px; font-weight: 800; color: var(--text-secondary); }
+.balance {
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 12px;
+  font-weight: 1000; font-size: 16px; color: var(--gold); background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 220, 150, 0.18);
+}
+
+/* Лента множителей */
+.strip {
+  display: flex; gap: 5px; overflow-x: auto; padding: 6px; border-radius: 12px; scrollbar-width: none;
+  background: rgba(20, 12, 6, 0.72); border: 1px solid rgba(255, 220, 150, 0.14);
+}
+.strip::-webkit-scrollbar { display: none; }
+.strip b {
+  flex: 0 0 auto; padding: 4px 8px; border-radius: 8px; font-size: 12px; font-weight: 900; font-variant-numeric: tabular-nums;
+  color: var(--cream); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.strip b.now { color: #fff; border-color: rgba(255, 255, 255, 0.55); background: rgba(255, 255, 255, 0.14); animation: live 1s ease-in-out infinite alternate; }
+.strip b.won { color: #9dff7a; border-color: rgba(120, 255, 90, 0.45); background: rgba(40, 90, 20, 0.4); }
+.strip b.gold { color: #3a2108; border-color: var(--gold-dark); background: linear-gradient(180deg, #ffe17a, var(--gold)); box-shadow: 0 0 8px rgba(255, 200, 60, 0.5); }
+@keyframes live { to { background: rgba(255, 255, 255, 0.26); } }
+.strip b.lost { color: #ff8b78; border-color: rgba(255, 110, 90, 0.4); background: rgba(110, 25, 15, 0.35); }
+
+/* Сцена с графиком */
 .scene {
-  position: relative; flex: 0 0 clamp(250px, 42vh, 342px); min-height: 250px; overflow: hidden; border-radius: 18px;
-  border: 1px solid rgba(255, 228, 170, 0.2);
-  background:
-    linear-gradient(180deg, #75cef7 0%, #bdeeff 42%, #88d374 76%, #5da241 100%);
-  box-shadow: inset 0 0 46px rgba(0, 0, 0, 0.25);
+  position: relative; width: 100%; aspect-ratio: 340 / 250; flex: 0 0 auto; overflow: hidden; border-radius: 18px;
+  border: 2px solid rgba(255, 205, 90, 0.75);
+  background: #101a2c;
+  box-shadow: 0 0 18px rgba(255, 190, 60, 0.25);
 }
-.zone-sky .scene { background: linear-gradient(180deg, #4aa6f3 0%, #bdeeff 80%); }
-.zone-clouds .scene { background: linear-gradient(180deg, #328de8 0%, #d9f7ff 100%); }
-.zone-space .scene, .zone-moon .scene, .zone-deep .scene {
-  background: radial-gradient(circle at 70% 18%, rgba(145, 190, 255, 0.28), transparent 18%), linear-gradient(180deg, #11163c 0%, #050817 100%);
+/* Фон сцены: тот же случайный crash-фон, блюр ~15%. */
+.scene-bg {
+  position: absolute; inset: -6px; background-size: cover; background-position: center 70%;
+  filter: blur(1.5px) brightness(0.85); transform: scale(1.02);
 }
-.layer { position: absolute; inset: -40% 0 0; pointer-events: none; }
-.stars {
-  opacity: 0; background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 28px 28px;
-  animation: drift 5s linear infinite;
+.scene::after { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.45); pointer-events: none; }
+.chart { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.grid { stroke: rgba(255, 255, 255, 0.09); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.axis { stroke: #ffd23f; stroke-width: 2; vector-effect: non-scaling-stroke; opacity: 0.9; }
+.tick { fill: #ffe27a; }
+.area { fill: url(#cf-area); }
+.line-glow { fill: none; stroke: rgba(255, 200, 50, 0.45); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; filter: blur(3px); vector-effect: non-scaling-stroke; }
+.line { fill: none; stroke: #ffd84a; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.dot { fill: #fff6c8; stroke: #ffb52e; stroke-width: 1.5; }
+.tipdot { fill: #fff; filter: drop-shadow(0 0 4px #ffd23f); }
+.crashed .line, .crashed .dot { stroke: #ff6a4a; }
+.crashed .line-glow { stroke: rgba(255, 80, 50, 0.45); }
+
+.ylab, .xlab {
+  position: absolute; font-size: 12px; font-weight: 900; color: #fff3cf; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none; font-variant-numeric: tabular-nums;
 }
-.zone-space .stars, .zone-moon .stars, .zone-deep .stars { opacity: 0.75; }
-.clouds::before, .clouds::after {
-  content: ''; position: absolute; width: 108px; height: 34px; border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72); filter: blur(0.2px); box-shadow: 38px 10px 0 rgba(255, 255, 255, 0.52), -26px 14px 0 rgba(255, 255, 255, 0.4);
+.ylab { transform: translateY(-50%); }
+.xlab { bottom: 1.5%; transform: translateX(-50%); font-size: 11px; }
+
+.mult {
+  position: absolute; left: 50%; top: 5%; transform: translateX(-50%); z-index: 3;
+  font-size: clamp(44px, 15vw, 70px); font-weight: 1000; line-height: 1; letter-spacing: -1px; color: #fff3c4;
+  background: linear-gradient(180deg, #fffbe6 10%, #ffd65a 60%, #f0a91c); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 3px 0 #6a3a10) drop-shadow(0 0 14px rgba(255, 200, 60, 0.55));
+  font-variant-numeric: tabular-nums; pointer-events: none;
 }
-.clouds.one { animation: drift 7s linear infinite; }
-.clouds.two { animation: drift 10s linear infinite reverse; opacity: 0.72; }
-.clouds.one::before { left: 8%; top: 42%; }
-.clouds.one::after { right: 2%; top: 58%; }
-.clouds.two::before { left: 44%; top: 28%; }
-.clouds.two::after { left: 20%; top: 74%; }
-.moon {
-  position: absolute; right: 24px; top: 28px; opacity: 0; font-size: 60px; color: #fff3a8;
-  text-shadow: 0 0 28px rgba(255, 242, 160, 0.55);
+.mult.hot { filter: drop-shadow(0 3px 0 #6a3a10) drop-shadow(0 0 22px rgba(255, 170, 40, 0.9)); }
+.mult.crashed { background: linear-gradient(180deg, #ffd0c4, #ff5a3c 70%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 3px 0 #5a1208); }
+.mult.won { background: linear-gradient(180deg, #eaffd8, #7cf04a 70%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 3px 0 #1d5212) drop-shadow(0 0 14px rgba(120, 255, 90, 0.5)); }
+.big-sub {
+  position: absolute; left: 50%; top: 31%; transform: translateX(-50%); z-index: 3; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 12px; border-radius: 99px; font-size: 14px; font-weight: 1000; animation: pop 0.35s ease both;
 }
-.zone-moon .moon, .zone-deep .moon { opacity: 1; }
-.farm-strip {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 62px; display: flex; align-items: flex-end; justify-content: space-around;
-  font-size: 32px; background: linear-gradient(180deg, transparent, rgba(37, 93, 31, 0.72));
-  transition: transform 0.6s, opacity 0.6s;
+.big-sub.lost { color: #fff; background: #c8321e; box-shadow: 0 3px 0 #6e140a; }
+.big-sub.won { color: #1d3a08; background: linear-gradient(180deg, #d4ff9c, #7ae04a); box-shadow: 0 3px 0 #2e6a14; }
+.big-sub.ms { color: #3a2108; background: linear-gradient(180deg, #fff4a6, var(--gold)); box-shadow: 0 3px 0 var(--gold-dark); }
+
+/* Курица на кончике линии */
+.bird { position: absolute; z-index: 2; width: 0; height: 0; pointer-events: none; }
+.bird-img {
+  position: absolute; left: -24px; top: -62px; width: 72px; height: 72px;
+  transform-origin: 50% 80%;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45));
 }
-.flying .farm-strip { animation: farm-drop 3.2s ease-in forwards; }
-.zone-clouds .farm-strip, .zone-space .farm-strip, .zone-moon .farm-strip, .zone-deep .farm-strip { opacity: 0; transform: translateY(110%); }
-.multiplier {
-  position: absolute; left: 50%; top: 42px; transform: translateX(-50%);
-  font-size: clamp(42px, 15vw, 72px); font-weight: 1000; line-height: 1; color: #fff6cf;
-  text-shadow: 0 4px 0 rgba(92, 50, 20, 0.8), 0 0 24px rgba(255, 206, 82, 0.4);
-  font-variant-numeric: tabular-nums;
+.flying .bird-img { animation: bob 0.9s ease-in-out infinite alternate; }
+.bird.fall .bird-img { animation: fall 0.9s cubic-bezier(0.5, 0, 0.9, 0.6) forwards; }
+
+/* Оранжевый ветер снизу — толкает курицу вверх по линии */
+.wind { position: absolute; left: 0; top: 0; transform: rotate(-18deg); }
+.wind i {
+  position: absolute; left: -6px; top: -6px; width: 34px; height: 5px; border-radius: 99px;
+  background: linear-gradient(90deg, rgba(255, 110, 10, 0), #ff8c1a 50%, #ffd65a);
+  box-shadow: 0 0 8px rgba(255, 140, 30, 0.95);
+  opacity: 0; animation: gust 0.55s linear infinite; animation-delay: calc(var(--i) * -0.046s);
 }
-.multiplier.hot { color: #ffe371; transform: translateX(-50%) scale(1.05); }
-.multiplier.space { text-shadow: 0 0 24px rgba(102, 196, 255, 0.85), 0 4px 0 rgba(0, 0, 0, 0.7); }
-.milestone {
-  position: absolute; left: 50%; top: 112px; transform: translateX(-50%); z-index: 4;
-  padding: 6px 14px; border-radius: 999px; font-weight: 1000; color: #3a2108;
-  background: linear-gradient(180deg, #fff4a6, var(--gold)); box-shadow: 0 4px 0 var(--gold-dark);
-  animation: milestone 0.9s ease both;
+.wind i:nth-child(odd) { width: 22px; height: 4px; }
+.wind i:nth-child(3n) { background: radial-gradient(circle, #fff3b0, #ff8a1e 55%, transparent 70%); width: 9px; height: 9px; box-shadow: 0 0 10px #ff9a2a; }
+/* Струи ветра вылетают из-под курицы назад-вниз, будто её несёт поток. */
+@keyframes gust {
+  0% { opacity: 0; transform: translate(4px, 4px) scaleX(0.5); }
+  12% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-78px, calc(10px + (var(--i) - 6) * 3.5px)) scaleX(1.25); }
 }
-.chicken-wrap {
-  position: absolute; left: 50%; top: 52%; width: 142px; height: 142px; transform: translate(-50%, -50%);
-  display: grid; place-items: center; animation: hover 0.85s ease-in-out infinite alternate;
-}
-.rocket { position: absolute; right: 4px; bottom: 24px; font-size: 30px; transform: rotate(-18deg); filter: drop-shadow(0 4px 2px rgba(0, 0, 0, 0.35)); }
-.flame {
-  position: absolute; bottom: 4px; width: 20px; height: 34px; border-radius: 999px 999px 45% 45%;
-  background: linear-gradient(180deg, #fff389, #ff8f28 55%, rgba(255, 45, 20, 0));
-  filter: blur(0.2px); opacity: 0; transform-origin: top center;
-}
-.flying .flame { opacity: 0.9; animation: flame 0.18s ease-in-out infinite alternate; }
-.flame.left { left: 34px; transform: rotate(16deg); }
-.flame.right { right: 24px; transform: rotate(-16deg); }
-.crash-burst, .success-burst {
-  position: absolute; left: 50%; top: 48%; transform: translate(-50%, -50%); z-index: 6;
-  font-size: 78px; font-weight: 1000; animation: burst 0.55s ease both;
-}
-.success-burst { color: #b9ff77; font-size: 42px; text-shadow: 0 4px 0 #215d16, 0 0 24px rgba(126, 255, 93, 0.6); }
+@keyframes bob { from { transform: translateY(2px); } to { transform: translateY(-4px); } }
+@keyframes fall { to { transform: translate(18px, 150px) rotate(140deg); opacity: 0.2; } }
+@keyframes pop { from { transform: translateX(-50%) scale(0.6); opacity: 0; } }
+
+/* Панель ставок */
 .panel {
-  padding: 12px; border-radius: 16px; background: linear-gradient(180deg, rgba(48, 31, 16, 0.94), rgba(22, 14, 8, 0.95));
-  border: 2px solid rgba(138, 93, 54, 0.86); box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+  display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 16px;
+  background: linear-gradient(180deg, rgba(52, 33, 17, 0.95), rgba(26, 16, 8, 0.96));
+  border: 2px solid rgba(160, 108, 52, 0.75); box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
 }
-.label { text-align: center; font-size: 12px; font-weight: 900; color: var(--text-secondary); }
-.amount-box { display: grid; grid-template-columns: 48px 1fr 48px; gap: 8px; align-items: center; margin: 8px 0; }
-.amount-box button {
-  height: 44px; border-radius: 12px; color: var(--gold); font-size: 24px; font-weight: 900;
-  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 220, 150, 0.2);
+.label { text-align: center; font-size: 12px; font-weight: 1000; letter-spacing: 0.5px; color: #e8cf9e; }
+.amount-box { display: grid; grid-template-columns: 50px 1fr 50px; gap: 8px; align-items: center; }
+.sq {
+  height: 46px; border-radius: 12px; color: #3a2108; font-size: 28px; font-weight: 1000; line-height: 1;
+  background: linear-gradient(180deg, #ffe17a, var(--gold)); box-shadow: 0 3px 0 var(--gold-dark);
 }
-.amount-box label, .x-box label {
-  min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  border-radius: 12px; color: var(--warm-white); font-size: 26px; font-weight: 1000; background: rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(255, 220, 150, 0.14); padding: 0 10px;
+.sq:disabled { opacity: 0.4; }
+.amount-box label {
+  height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border-radius: 12px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 220, 150, 0.16); padding: 0 10px;
 }
-.amount-box input, .x-box input {
-  width: 100%; min-width: 0; border: 0; outline: 0; text-align: center;
-  color: var(--warm-white); background: transparent; font: inherit; font-size: 25px; font-weight: 1000;
+.amount-box input {
+  width: 100%; max-width: 120px; min-width: 0; border: 0; outline: 0; text-align: center;
+  color: var(--warm-white); background: transparent; font: inherit; font-size: 26px; font-weight: 1000;
 }
-.amount-box input { max-width: 130px; }
-.x-box { display: grid; grid-template-columns: 112px 1fr; gap: 8px; align-items: center; margin-top: 7px; }
-.x-box label { min-height: 40px; font-size: 21px; padding: 0 8px; }
-.x-box input { font-size: 21px; }
-.x-box b { color: var(--gold); font-size: 18px; }
-.collect-label { margin-top: 10px; }
-.x-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
-.x-presets button {
-  min-height: 40px; border-radius: 10px; color: var(--cream); font-weight: 900;
-  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 220, 150, 0.18);
+.chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.chips button {
+  height: 38px; border-radius: 10px; color: var(--cream); font-size: 15px; font-weight: 1000;
+  background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 220, 150, 0.18);
 }
-.x-presets button.on { color: #3a2108; background: linear-gradient(180deg, #ffe17a, var(--gold)); }
-.amount-box input::-webkit-outer-spin-button, .amount-box input::-webkit-inner-spin-button,
-.x-box input::-webkit-outer-spin-button, .x-box input::-webkit-inner-spin-button {
-  -webkit-appearance: none; margin: 0;
+.chips button.on { color: #3a2108; background: linear-gradient(180deg, #ffe17a, var(--gold)); border-color: var(--gold-dark); box-shadow: 0 2px 0 var(--gold-dark); }
+.chips button:disabled:not(.on) { opacity: 0.4; }
+.gold-btn {
+  margin-top: 4px; height: 58px; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  font-size: 22px; font-weight: 1000; letter-spacing: 0.5px; color: #3a2108;
+  background: linear-gradient(180deg, #fff0a0, #ffcf3a 45%, #f0a51a);
+  border: 2px solid #fff3b0; box-shadow: 0 4px 0 #9a5a0a, 0 0 18px rgba(255, 200, 60, 0.45);
 }
-.presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.presets button {
-  min-height: 34px; border-radius: 10px; color: var(--cream); font-weight: 900;
-  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 220, 150, 0.18);
+.gold-btn.huge { height: 64px; font-size: 25px; }
+.gold-btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 0 #9a5a0a; }
+.gold-btn:disabled { opacity: 0.5; }
+.en-cost {
+  display: inline-flex; align-items: center; gap: 1px; padding: 2px 8px 2px 4px; border-radius: 99px;
+  font-size: 15px; background: rgba(58, 33, 8, 0.25);
 }
-.presets button.on { color: #3a2108; background: linear-gradient(180deg, #ffe17a, var(--gold)); }
-.returns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0; }
-.returns span {
-  padding: 6px 4px; border-radius: 10px; text-align: center; font-size: 12px; font-weight: 900;
-  color: var(--gold); background: rgba(0, 0, 0, 0.24);
-}
-.blocked {
-  margin-top: 8px; text-align: center; color: #ffb09d; font-size: 12px; font-weight: 800;
-}
-.active { display: grid; gap: 10px; }
+.blocked { text-align: center; color: #ffb09d; font-size: 12px; font-weight: 800; }
 .run-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.run-stats span {
-  display: flex; flex-direction: column; gap: 3px; padding: 8px; border-radius: 12px;
-  color: var(--text-secondary); font-size: 11px; font-weight: 900; background: rgba(0, 0, 0, 0.24);
+.run-stats > span {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px; border-radius: 12px;
+  color: var(--text-secondary); font-size: 11px; font-weight: 900; background: rgba(0, 0, 0, 0.3);
 }
-.run-stats b { display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--warm-white); font-size: 17px; }
-.result { display: grid; gap: 8px; text-align: center; }
-.result h2 { color: var(--gold); font-size: 24px; }
-.result-line { color: var(--warm-white); font-size: 42px; font-weight: 1000; line-height: 1; }
-.profit { color: #a8ff69; font-size: 19px; }
-.history {
-  display: flex; align-items: center; gap: 6px; overflow-x: auto; padding: 6px 2px; scrollbar-width: none;
-}
-.history span { flex: 0 0 auto; color: var(--text-secondary); font-size: 11px; font-weight: 900; }
-.history b {
-  flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; color: #b9ff77; background: rgba(0, 0, 0, 0.32);
-  border: 1px solid rgba(185, 255, 119, 0.2); font-size: 12px;
-}
-.history b.lost { color: #ff8b78; border-color: rgba(255, 139, 120, 0.24); }
-@keyframes drift { to { transform: translateY(32%); } }
-@keyframes farm-drop { to { transform: translateY(110%); opacity: 0; } }
-@keyframes hover { to { transform: translate(-50%, -55%) rotate(2deg); } }
-@keyframes flame { to { height: 44px; filter: blur(1px); } }
-@keyframes milestone {
-  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.7); }
-  20%, 75% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -10px) scale(1.08); }
-}
-@keyframes burst {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
-  65% { opacity: 1; transform: translate(-50%, -50%) scale(1.18); }
-  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-@media (max-height: 690px) {
-  .scene { flex-basis: 238px; min-height: 238px; }
-  .chicken-wrap { transform: translate(-50%, -42%) scale(0.88); }
-  .multiplier { top: 30px; }
-}
+.run-stats b { display: inline-flex; align-items: center; gap: 4px; color: var(--warm-white); font-size: 18px; }
+
 @media (prefers-reduced-motion: reduce) {
-  .stars, .clouds, .farm-strip, .chicken-wrap, .flame, .milestone, .crash-burst, .success-burst { animation: none; }
+  .wind i, .flying .bird-img { animation: none; }
 }
 </style>

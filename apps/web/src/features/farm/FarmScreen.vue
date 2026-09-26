@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import CoinIcon from '@/components/CoinIcon.vue'
 // Вкладка 1 — Ферма: фон, курица, сбор производства, быстрые действия.
 import { computed, ref } from 'vue'
 import { useGameStore } from '@/stores/game'
@@ -11,8 +10,6 @@ import GameBackground from '@/components/GameBackground.vue'
 import FarmScene from './FarmScene.vue'
 import OfflineCard from './OfflineCard.vue'
 import FloatingReward from '@/components/FloatingReward.vue'
-import EggIcon from '@/components/EggIcon.vue'
-import { t } from '@/i18n'
 
 const game = useGameStore()
 const ui = useUiStore()
@@ -23,7 +20,7 @@ const bgIndex = computed(() => Math.min(settings.farmBg, total - 1))
 const bgSrc = computed(() => FARM_BACKGROUNDS[bgIndex.value] ?? '')
 
 function shiftBg(dir: 1 | -1) {
-  playSound('click', 0.4)
+  playSound('clickCalendar', 0.6)
   settings.shiftFarmBg(dir, total)
 }
 
@@ -61,10 +58,6 @@ function onCollected(n: number) {
 
     <div class="bottom">
       <OfflineCard @collected="onCollected" />
-      <div class="actions">
-        <button class="card action" @click="playSound('sellUi', 0.7); ui.setTab('market')"><CoinIcon :size="22" /> {{ t('farm.goSell') }}</button>
-        <button class="card action" @click="playSound('click', 0.6); ui.setTab('play')"><EggIcon :size="20" /> {{ t('farm.goPlay') }}</button>
-      </div>
     </div>
   </div>
 </template>
@@ -74,6 +67,4 @@ function onCollected(n: number) {
 .farm { position: relative; z-index: 1; flex: 1; }
 .scene-wrap { position: relative; flex: 1; display: flex; flex-direction: column; }
 .bottom { display: flex; flex-direction: column; gap: 10px; }
-.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.action { height: 52px; font-weight: 900; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 6px; }
 </style>

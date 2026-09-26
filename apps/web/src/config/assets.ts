@@ -10,10 +10,15 @@ export const ASSETS = {
     catch: '/assets/play/eggplay.webp',
     fox: '/assets/play/play2.webp',
     run: '/assets/play/play3.webp',
+    double: '/assets/play/play4.webp',
   },
   /** Лисы в режиме "Защита от лис": обычная и крепкая (в каске). Смотрят вправо. */
   /** Яйцо в корзине — в центре "Защиты от лис". */
   eggBasket: '/assets/play/eggplay.webp',
+  /** Барабан Дабла (из play/double.png): крутящаяся часть и неподвижная рамка с указателем. */
+  double: { rotor: '/assets/play/double_rotor.webp', frame: '/assets/play/double_frame.webp' },
+  /** Фоны Chicken Flight — при входе выбирается случайный. */
+  crashBackgrounds: ['/assets/play/crash1.webp', '/assets/play/crash2.webp', '/assets/play/crash3.webp'],
   /** Бомба в режиме "Курица и бомбы". */
   bomb: '/assets/play/bomb.webp',
   foxes: {
@@ -34,6 +39,19 @@ export const ASSETS = {
   ui: {
     /** Плашка ежедневной награды в шапке (календарь + окошко таймера). */
     calendar: '/assets/ui/calendar.webp',
+    /** Рамка окна ежедневной награды (ячейки уже нарисованы, текст кладётся поверх). */
+    /** Иконка BIRD Points (вместо 💎). */
+    birdPoints: '/assets/ui/birdpoints.webp',
+    /** Нижняя панель фермы (сбор, склад, кнопки) — ui/farmui. */
+    /** Значок заданий "Пригласи друзей" (Activity). */
+    referral: '/assets/ui/referal.webp',
+    /** Кнопка "Улучшить" у куриц (зелёная плашка) и стрелка на ней. */
+    upgradeBtn: '/assets/ui/upgrade.webp',
+    upgradeArrow: '/assets/ui/upgrade_arrow.webp',
+    /** Подарок (вместо 🎁): 7-й день календаря, бонус-код. */
+    present: '/assets/ui/present.webp',
+    farmPanel: '/assets/ui/farmui.webp',
+    calendarFrame: '/assets/ui/uicalendar2.webp',
     /** Плашки "Рейтинг" и "Друзья" в шапке. */
     rating: '/assets/ui/rating.webp',
     friends: '/assets/ui/friends.webp',
@@ -71,8 +89,10 @@ export const SOUNDS = {
   /** Покупка курицы в магазине. */
   buy: '/audio/sfx/buy.mp3',
   reward: '/audio/sfx/reward.mp3',
-  /** Тап по курице на ферме. */
+  /** Старый звук тапа по курице (не используется). */
   cluck: '/audio/sfx/cluck.mp3',
+  /** Тап по курице на ферме. */
+  chickenFarm: '/audio/sfx/chickenfarm.mp3',
   /** Нажатие на вкладку нижнего меню и стрелки фона. */
   click: '/audio/sfx/click.mp3',
   /** Ошибка: не хватает монет и т.п. */
@@ -99,6 +119,8 @@ export const SOUNDS = {
   sellUi: '/audio/sfx/sellui.mp3',
   /** Поставить курицу на главный экран (окно "Выбрать курицу" на Ферме). */
   chickenClick: '/audio/sfx/chikenclick.mp3',
+  /** Стрелки листания: недели в календаре и фон фермы. */
+  clickCalendar: '/audio/sfx/clickcalendar.mp3',
   /** Повышение уровня игрока. */
   lvlup: '/audio/sfx/lvlup.mp3',
 } as const

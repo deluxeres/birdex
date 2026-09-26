@@ -9,6 +9,7 @@ import PlayMenu from './PlayMenu.vue'
 import CatchGame from './CatchGame.vue'
 import FoxGame from './modes/FoxGame.vue'
 import RunGame from './modes/RunGame.vue'
+import DoubleGame from './modes/DoubleGame.vue'
 
 const settings = useSettingsStore()
 const bgSrc = computed(() => FARM_BACKGROUNDS[settings.farmBg] ?? FARM_BACKGROUNDS[0])
@@ -22,4 +23,5 @@ const mode = ref<PlayMode | null>(null)
   <CatchGame v-else-if="mode === 'catch'" @back="mode = null" />
   <FoxGame v-else-if="mode === 'fox'" @back="mode = null" />
   <RunGame v-else-if="mode === 'run'" @back="mode = null" />
+  <DoubleGame v-else-if="mode === 'double'" @back="mode = null" />
 </template>

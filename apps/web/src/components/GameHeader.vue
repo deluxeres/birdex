@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import CoinIcon from '@/components/CoinIcon.vue'
+import BirdPointsIcon from '@/components/BirdPointsIcon.vue'
 // Верх экрана: профиль, игровая экономика и сезонные BIRD Points.
 import { computed } from 'vue'
 import { useGameStore } from '@/stores/game'
@@ -71,7 +72,7 @@ function open(sheet: SheetId, sound: 'openPanel' | 'openCalendar' | 'settings') 
 
     <button class="season-card" @click="ui.setTab('season')">
       <span class="season-name">🏆 {{ t('season.seasonN', { n: game.season?.id ?? 1 }) }}</span>
-      <span class="season-points">💎 {{ formatNumber(game.season?.points ?? 0) }}</span>
+      <span class="season-points"><BirdPointsIcon :size="18" /> {{ formatNumber(game.season?.points ?? 0) }}</span>
       <span class="season-rank">#{{ formatNumber(rank) }}</span>
     </button>
   </header>
@@ -106,6 +107,6 @@ function open(sheet: SheetId, sound: 'openPanel' | 'openCalendar' | 'settings') 
   text-align: left; font-weight: 900;
 }
 .season-name { color: var(--text-primary); }
-.season-points { color: var(--gold); }
+.season-points { color: var(--gold); display: inline-flex; align-items: center; gap: 4px; }
 .season-rank { color: var(--text-secondary); font-size: 13px; }
 </style>

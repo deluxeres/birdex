@@ -75,6 +75,7 @@ export interface EventState {
   invite5Claimed?: boolean
   invite10Claimed?: boolean
   invite25Claimed?: boolean
+  invite100Claimed?: boolean
 }
 
 export interface SeasonState {

@@ -12,10 +12,17 @@
 //   POST /api/ref/claim    — забрать накопленные 12%
 //   POST /api/channel/check — подписан ли игрок на канал (спрашиваем у Telegram)
 //   POST /api/channel/claim — бонус за подписку (один раз на аккаунт)
+//   POST /api/games/chicken-flight/start|collect, GET .../active — Chicken Flight (тратит 30 энергии режима run)
+//   GET  /api/games/double/history, POST /api/games/double/spin — Дабл (тратит 30 энергии режима double)
 
 import { verifyInitData, type TgAuth } from './telegramAuth'
 import { ensureSchema, type ChickenFlightRow, type D1Database, type UserRow } from './db'
-import { CHICKEN_FLIGHT, flightElapsedForMultiplier, flightMultiplierAt, flightReward, randomCrashMultiplier } from './chickenFlight'
+import { CHICKEN_FLIGHT, crashMultiplierForFlight, flightElapsedForMultiplier, flightMultiplierAt, flightReward } from './chickenFlight'
+import { DOUBLE, doubleReward, doubleSlotColor, randomDoubleSlot, type DoubleColor } from './double'
+import { spendModeEnergy, type ModeEnergy } from './modeEnergy'
+
+/** Энергия за один запуск Chicken Flight. */
+const FLIGHT_ENERGY_COST = 30
 
 interface Env {
   DB: D1Database
@@ -89,10 +96,11 @@ async function handleAuth(a: TgAuth, env: Env): Promise<Response> {
 interface SavedState {
   profile?: { farmName?: string; level?: number; xp?: number; avatar?: string }
   balance?: { coins?: number; eggs?: number }
-  events?: { invite5Claimed?: boolean; invite10Claimed?: boolean; invite25Claimed?: boolean; channelSubscribed?: boolean; channelBonusClaimed?: boolean }
+  events?: { invite5Claimed?: boolean; invite10Claimed?: boolean; invite25Claimed?: boolean; invite100Claimed?: boolean; channelSubscribed?: boolean; channelBonusClaimed?: boolean }
   season?: { points?: number }
   chickens?: unknown[]
   stats?: { soldCoins?: number; bestPlay?: number }
+  modeEnergy?: Record<string, ModeEnergy>
 }
 
 /** Целое неотрицательное число из сохранения (мусор → 0). */
@@ -220,12 +228,13 @@ const INVITE_TASK_REWARDS = {
   5: { coins: 20000, birdPoints: 0 },
   10: { coins: 50000, birdPoints: 0 },
   25: { coins: 150000, birdPoints: 250 },
+  100: { coins: 800000, birdPoints: 2000 },
 } as const
 
 async function handleInviteTaskClaim(a: TgAuth, req: Request, env: Env): Promise<Response> {
   const body = (await req.json().catch(() => null)) as { target?: unknown } | null
   const target = Number(body?.target)
-  if (target !== 5 && target !== 10 && target !== 25) return fail('BAD_AMOUNT')
+  if (target !== 5 && target !== 10 && target !== 25 && target !== 100) return fail('BAD_AMOUNT')
   const friends = (await env.DB.prepare('SELECT COUNT(*) AS n FROM users WHERE referred_by = ?')
     .bind(a.user.id)
     .first<{ n: number }>())?.n ?? 0
@@ -235,7 +244,7 @@ async function handleInviteTaskClaim(a: TgAuth, req: Request, env: Env): Promise
   const state = parseState(row.state)
   state.balance = { ...(state.balance ?? {}), coins: num(state.balance?.coins) }
   state.events = { ...(state.events ?? {}) }
-  const key = target === 5 ? 'invite5Claimed' : target === 10 ? 'invite10Claimed' : 'invite25Claimed'
+  const key = target === 5 ? 'invite5Claimed' : target === 10 ? 'invite10Claimed' : target === 25 ? 'invite25Claimed' : 'invite100Claimed'
   if (state.events[key]) return fail('BONUS_CLAIMED')
   const { coins, birdPoints } = INVITE_TASK_REWARDS[target]
   state.events[key] = true
@@ -375,7 +384,9 @@ async function handleFlightStart(a: TgAuth, req: Request, env: Env): Promise<Res
   if (amount > eggs) return fail('NOT_ENOUGH_EGGS')
 
   const now = Date.now()
-  const crashMultiplier = randomCrashMultiplier()
+  if (!spendModeEnergy(state, 'run', FLIGHT_ENERGY_COST, now)) return fail('NO_ENERGY')
+  const done = await env.DB.prepare('SELECT COUNT(*) AS n FROM chicken_flights WHERE user_id = ?').bind(a.user.id).first<{ n: number }>()
+  const crashMultiplier = crashMultiplierForFlight((done?.n ?? 0) + 1)
   const sessionId = crypto.randomUUID()
   state.balance = { ...(state.balance ?? {}), eggs: eggs - amount }
   const stateText = JSON.stringify(state)
@@ -454,6 +465,45 @@ async function handleFlightCollect(a: TgAuth, req: Request, env: Env): Promise<R
   return json({ success: !crashed, status, multiplier, reward, amount: row.amount, state, history })
 }
 
+// ── Дабл ──
+async function doubleHistory(a: TgAuth, env: Env) {
+  const rows = await env.DB.prepare(
+    'SELECT id, bet, slot, color, amount, reward, created_at FROM double_spins WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+  )
+    .bind(a.user.id, DOUBLE.historyLimit)
+    .all<{ id: string; bet: DoubleColor; slot: number; color: DoubleColor; amount: number; reward: number; created_at: number }>()
+  return rows.results.map((r) => ({
+    id: r.id, bet: r.bet, slot: r.slot, color: r.color, amount: r.amount, reward: r.reward, createdAt: r.created_at,
+  }))
+}
+
+async function handleDoubleSpin(a: TgAuth, req: Request, env: Env): Promise<Response> {
+  const body = (await req.json().catch(() => null)) as { amount?: unknown; bet?: unknown } | null
+  const amount = Math.floor(Number(body?.amount))
+  const bet = String(body?.bet ?? '') as DoubleColor
+  if (!Number.isFinite(amount) || amount < DOUBLE.minAmount || amount > DOUBLE.maxAmount) return fail('BAD_AMOUNT')
+  if (bet !== 'red' && bet !== 'black' && bet !== 'green') return fail('BAD_BET')
+  const { state } = await getStateForFlight(a, env)
+  const eggs = num(state.balance?.eggs)
+  if (amount > eggs) return fail('NOT_ENOUGH_EGGS')
+  const now = Date.now()
+  if (!spendModeEnergy(state, 'double', DOUBLE.playCost, now)) return fail('NO_ENERGY')
+
+  const slot = randomDoubleSlot()
+  const color = doubleSlotColor(slot)
+  const reward = doubleReward(amount, bet, color)
+  state.balance = { ...(state.balance ?? {}), eggs: eggs - amount + reward }
+  const id = crypto.randomUUID()
+  await env.DB.batch([
+    env.DB.prepare('UPDATE users SET state = ?, best_play = MAX(best_play, ?), updated_at = ? WHERE id = ?')
+      .bind(JSON.stringify(state), reward, now, a.user.id),
+    env.DB.prepare('INSERT INTO double_spins (id, user_id, amount, bet, slot, color, reward, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, a.user.id, amount, bet, slot, color, reward, now),
+  ])
+  const history = await doubleHistory(a, env)
+  return json({ id, slot, color, win: reward > 0, amount, bet, reward, state, history })
+}
+
 async function handleApi(req: Request, env: Env, path: string): Promise<Response> {
   if (!env.DB) return fail('NO_DB', 503)
   if (!env.BOT_TOKEN) return fail('NO_BOT_TOKEN', 503)
@@ -472,6 +522,8 @@ async function handleApi(req: Request, env: Env, path: string): Promise<Response
   if (path === '/api/games/chicken-flight/active' && m === 'GET') return handleFlightActive(a, env)
   if (path === '/api/games/chicken-flight/start' && m === 'POST') return handleFlightStart(a, req, env)
   if (path === '/api/games/chicken-flight/collect' && m === 'POST') return handleFlightCollect(a, req, env)
+  if (path === '/api/games/double/history' && m === 'GET') return json({ history: await doubleHistory(a, env) })
+  if (path === '/api/games/double/spin' && m === 'POST') return handleDoubleSpin(a, req, env)
   return fail('NOT_FOUND', 404)
 }
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // Бонус-код в настройках: ввёл код → монеты. Каждый код — 1 раз.
+import { ASSETS } from '@/config/assets'
 import { ref } from 'vue'
 import { useGameStore } from '@/stores/game'
 import { useUiStore } from '@/stores/ui'
@@ -35,7 +36,7 @@ async function apply() {
 
 <template>
   <div class="card promo">
-    <label class="title" for="promo-code">🎁 {{ t('settings.promoTitle') }}</label>
+    <label class="title" for="promo-code"><img class="gift" :src="ASSETS.ui.present" alt="" /> {{ t('settings.promoTitle') }}</label>
     <form class="row" :class="{ 'shake-x': shaking }" @animationend="shaking = false" @submit.prevent="apply">
       <input
         id="promo-code"
@@ -56,7 +57,8 @@ async function apply() {
 
 <style scoped>
 .promo { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-.title { font-weight: 900; }
+.title { font-weight: 900; display: inline-flex; align-items: center; gap: 6px; }
+.gift { width: 24px; height: 30px; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5)); }
 .input {
   flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: var(--radius-sm);
   border: 2px solid var(--surface-wood); background: rgba(0, 0, 0, 0.4); color: var(--text-primary);

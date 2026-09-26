@@ -45,7 +45,12 @@ function onBuy() {
       <div class="small row-i"><EggIcon :size="14" /> {{ t('shop.production', { n: def.baseProductionPerHour }) }}</div>
     </div>
     <div class="buy" :class="{ poor: !affordable && !owned, shake: shaking }" @animationend="shaking = false">
-      <PrimaryButton v-if="owned" small variant="wood" disabled>{{ t('shop.owned') }}</PrimaryButton>
+      <div v-if="owned" class="owned">
+        <span class="tick" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7" /></svg>
+        </span>
+        {{ t('shop.owned') }}
+      </div>
       <PrimaryButton
         v-else
         small
@@ -69,6 +74,21 @@ function onBuy() {
 .rare { border-color: var(--rarity-rare); }
 .epic { border-color: var(--rarity-epic); }
 .legendary { border-color: var(--rarity-legendary); }
+
+/* Куплено: зелёный кружок с галочкой + надпись. */
+.owned {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 5px; border-radius: 99px;
+  font-size: 13px; font-weight: 900; color: #b9f5a4;
+  background: rgba(40, 90, 25, 0.35); border: 1px solid rgba(120, 220, 90, 0.45);
+}
+.tick {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 35% 30%, #9bf07a, #3fb72c 60%, #237a18);
+  box-shadow: 0 2px 0 #1a5a12, 0 0 8px rgba(110, 230, 80, 0.55);
+}
+.tick svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 0 rgba(0, 60, 0, 0.6)); }
+.tick path { stroke-dasharray: 24; stroke-dashoffset: 0; animation: tick-draw 0.5s ease-out; }
+@keyframes tick-draw { from { stroke-dashoffset: 24; } }
 
 /* Цена "дышит" при наведении (на телефоне — при касании). */
 .price { display: inline-flex; align-items: center; gap: 4px; }

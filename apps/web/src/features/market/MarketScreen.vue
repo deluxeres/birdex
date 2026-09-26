@@ -12,6 +12,7 @@ import ProgressBar from '@/components/ProgressBar.vue'
 import EggIcon from '@/components/EggIcon.vue'
 import CoinIcon from '@/components/CoinIcon.vue'
 import CoinText from '@/components/CoinText.vue'
+import BirdPointsIcon from '@/components/BirdPointsIcon.vue'
 import CoinBalance from '@/components/CoinBalance.vue'
 import FarmBackdrop from '@/components/FarmBackdrop.vue'
 import { playSound } from '@/services/audio'
@@ -136,8 +137,8 @@ async function sell() {
         <span>{{ formatNumber(coins) }}</span>
       </div>
       <div class="bp">
-        <span v-if="points > 0" class="bp-gain">+{{ formatNumber(points) }} 💎 {{ t('season.pointsShort') }}</span>
-        <span v-else class="muted">{{ t('market.pointsNext', { n: formatNumber(toNextPoint) }) }}</span>
+        <span v-if="points > 0" class="bp-gain">+{{ formatNumber(points) }} <BirdPointsIcon :size="16" /> {{ t('season.pointsShort') }}</span>
+        <CoinText v-else class="muted" :text="t('market.pointsNext', { n: formatNumber(toNextPoint) })" :size="15" />
       </div>
       <PrimaryButton variant="gold" :disabled="amount <= 0" :loading="game.pending === 'sell'" @click="sell">
         {{ total > 0 ? t('market.sell') : t('market.empty') }}
@@ -216,7 +217,7 @@ async function sell() {
 
 /* BIRD Points за продажу */
 .bp { font-size: 13px; font-weight: 800; text-align: center; }
-.bp-gain { color: #8fd3ff; text-shadow: 0 0 8px rgba(120, 200, 255, 0.5); }
+.bp-gain { display: inline-flex; align-items: center; gap: 4px; color: #8fd3ff; text-shadow: 0 0 8px rgba(120, 200, 255, 0.5); }
 
 /* Чек */
 .receipt {

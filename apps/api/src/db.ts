@@ -76,6 +76,17 @@ const SCHEMA = [
     created_at INTEGER NOT NULL
   )`,
   'CREATE INDEX IF NOT EXISTS chicken_flights_user_status ON chicken_flights (user_id, status, created_at DESC)',
+  `CREATE TABLE IF NOT EXISTS double_spins (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    amount INTEGER NOT NULL,
+    bet TEXT NOT NULL,
+    slot INTEGER NOT NULL,
+    color TEXT NOT NULL,
+    reward INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  )`,
+  'CREATE INDEX IF NOT EXISTS double_spins_user ON double_spins (user_id, created_at DESC)',
 ]
 
 /**

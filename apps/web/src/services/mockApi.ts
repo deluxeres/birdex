@@ -13,13 +13,14 @@ import { energyUpgradeCost, ENERGY_MAX_LEVEL } from '@/economy/energy'
 import { storageUpgradeCost, STORAGE_MAX_LEVEL } from '@/economy/storage'
 import { birdPointsForSale } from '@/economy/season'
 import { modeConfig, modeEnergyNow, modeEnergyMax, modeMaxed, foxEggs, runEggs, type ExtraMode } from '@/economy/modes'
-import { CHICKEN_FLIGHT, flightElapsedForMultiplier, flightMultiplierAt, flightReward, randomCrashMultiplier } from '@/economy/chickenFlight'
+import { CHICKEN_FLIGHT, crashMultiplierForFlight, flightElapsedForMultiplier, flightMultiplierAt, flightReward } from '@/economy/chickenFlight'
 import { findPromo, normalizeCode } from '@/config/promo'
 import type { GameState } from '@/types/game'
-import { ApiError, type ChickenFlightHistoryEntry, type GameApi, type PlaySessionTicket } from './apiTypes'
+import { ApiError, type ChickenFlightHistoryEntry, type DoubleHistoryEntry, type GameApi, type PlaySessionTicket } from './apiTypes'
+import { doubleReward, doubleSlotColor, randomDoubleSlot } from '@/economy/double'
 import { loadSave, writeSave } from './storage'
 import { createNewState, syncEnergy, syncDerived, addXp, clone, SAVE_VERSION } from './mockState'
-import { cloudEnabled, cloudLogin, cloudSave, cloudLeaderboard, cloudFriends, cloudClaimReferral, cloudClaimInviteTask, cloudChannelCheck, cloudChannelClaim, cloudChickenFlightActive, cloudChickenFlightCollect, cloudChickenFlightStart } from './cloud'
+import { cloudEnabled, cloudLogin, cloudSave, cloudLeaderboard, cloudFriends, cloudClaimReferral, cloudClaimInviteTask, cloudChannelCheck, cloudChannelClaim, cloudChickenFlightActive, cloudChickenFlightCollect, cloudChickenFlightStart, cloudDoubleHistory, cloudDoubleSpin } from './cloud'
 import { setSaveOwner } from './storage'
 import { getTelegramUser } from './telegram'
 
@@ -42,7 +43,48 @@ let activeFlight: {
   crashMultiplier: number
   settled?: boolean
 } | null = null
-let flightHistory: ChickenFlightHistoryEntry[] = []
+const DOUBLE_HISTORY_KEY = 'birdex_double_history'
+let doubleHistory: DoubleHistoryEntry[] = (() => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DOUBLE_HISTORY_KEY) ?? '[]')
+    return Array.isArray(raw) ? (raw as DoubleHistoryEntry[]) : []
+  } catch {
+    return []
+  }
+})()
+
+/** Списать энергию режима (Chicken Flight, Дабл). Нет энергии — ошибка NO_ENERGY. */
+function spendModeEnergy(s: GameState, mode: ExtraMode, now: number) {
+  const e = s.modeEnergy[mode]
+  const cost = modeConfig(mode).playCost
+  const energy = modeEnergyNow(e, now)
+  if (energy < cost) throw new ApiError('NO_ENERGY')
+  s.modeEnergy[mode] = { ...e, energy: energy - cost, updatedAt: now }
+}
+
+const FLIGHT_COUNT_KEY = 'birdex_flight_count'
+/** Номер следующего полёта (для правила "каждый 5-й может сгореть на 1.00x"). */
+function nextFlightNumber(): number {
+  let n = 0
+  try {
+    n = Math.floor(Number(localStorage.getItem(FLIGHT_COUNT_KEY)) || 0) + 1
+    localStorage.setItem(FLIGHT_COUNT_KEY, String(n))
+  } catch {
+    n = Math.floor(Math.random() * 5) + 1
+  }
+  return n
+}
+
+const FLIGHT_HISTORY_KEY = 'birdex_flight_history'
+/** История полётов хранится в localStorage, чтобы не пропадала после перезахода. */
+let flightHistory: ChickenFlightHistoryEntry[] = (() => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FLIGHT_HISTORY_KEY) ?? '[]')
+    return Array.isArray(raw) ? (raw as ChickenFlightHistoryEntry[]) : []
+  } catch {
+    return []
+  }
+})()
 
 let booted: Promise<void> | null = null
 
@@ -107,6 +149,11 @@ function commit(): GameState {
 
 function pushFlightHistory(entry: ChickenFlightHistoryEntry) {
   flightHistory = [entry, ...flightHistory.filter((x) => x.id !== entry.id)].slice(0, CHICKEN_FLIGHT.historyLimit)
+  try {
+    localStorage.setItem(FLIGHT_HISTORY_KEY, JSON.stringify(flightHistory))
+  } catch {
+    /* storage недоступен — история только в памяти */
+  }
 }
 
 function flightStats() {
@@ -427,7 +474,8 @@ export const mockApi: GameApi = {
     const amount = Math.floor(Number(rawAmount))
     if (!Number.isFinite(amount) || amount < CHICKEN_FLIGHT.minAmount || amount > CHICKEN_FLIGHT.maxAmount) throw new ApiError('BAD_AMOUNT')
     if (amount > s.balance.eggs) throw new ApiError('NOT_ENOUGH_EGGS')
-    const crashMultiplier = randomCrashMultiplier()
+    spendModeEnergy(s, 'run', now)
+    const crashMultiplier = crashMultiplierForFlight(nextFlightNumber())
     s.balance.eggs -= amount
     activeFlight = {
       sessionId: `cf_${now}`,
@@ -480,6 +528,45 @@ export const mockApi: GameApi = {
     }
   },
 
+  async doubleHistory() {
+    await boot()
+    if (cloudEnabled()) return cloudDoubleHistory()
+    return { history: doubleHistory }
+  },
+
+  async doubleSpin(rawAmount, bet) {
+    await boot()
+    if (cloudEnabled()) {
+      const res = await cloudDoubleSpin(rawAmount, bet)
+      state = res.state
+      syncDerived(state)
+      writeSave(state)
+      return res
+    }
+    await wait()
+    const s = db()
+    const now = Date.now()
+    const D = ECONOMY.modes.double
+    const amount = Math.floor(Number(rawAmount))
+    if (!Number.isFinite(amount) || amount < D.minAmount || amount > D.maxAmount) throw new ApiError('BAD_AMOUNT')
+    if (bet !== 'red' && bet !== 'black' && bet !== 'green') throw new ApiError('BAD_BET')
+    if (amount > s.balance.eggs) throw new ApiError('NOT_ENOUGH_EGGS')
+    spendModeEnergy(s, 'double', now)
+    const slot = randomDoubleSlot(crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32)
+    const color = doubleSlotColor(slot)
+    const reward = doubleReward(amount, bet, color)
+    s.balance.eggs += reward - amount
+    s.stats.bestPlay = Math.max(s.stats.bestPlay, reward)
+    const entry: DoubleHistoryEntry = { id: `db_${now}`, bet, slot, color, amount, reward, createdAt: now }
+    doubleHistory = [entry, ...doubleHistory].slice(0, D.historyLimit)
+    try {
+      localStorage.setItem(DOUBLE_HISTORY_KEY, JSON.stringify(doubleHistory))
+    } catch {
+      /* только в памяти */
+    }
+    return { id: entry.id, slot, color, win: reward > 0, amount, bet, reward, state: commit(), history: doubleHistory }
+  },
+
   async leaderboard(kind) {
     if (!cloudEnabled()) return { top: [], me: null, online: false }
     const res = await cloudLeaderboard(kind)
@@ -509,7 +596,7 @@ export const mockApi: GameApi = {
       return res
     }
     await wait()
-    const key = target === 5 ? 'invite5Claimed' : target === 10 ? 'invite10Claimed' : 'invite25Claimed'
+    const key = target === 5 ? 'invite5Claimed' : target === 10 ? 'invite10Claimed' : target === 25 ? 'invite25Claimed' : 'invite100Claimed'
     if (s.events[key]) throw new ApiError('BONUS_CLAIMED')
     // В обычном браузере рефералы проверить нельзя, поэтому задача честно недоступна.
     throw new ApiError('OFFLINE')

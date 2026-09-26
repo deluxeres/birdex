@@ -214,7 +214,7 @@ export const useGameStore = defineStore('game', () => {
     return res.coins
   }
 
-  async function claimInviteTask(target: 5 | 10 | 25) {
+  async function claimInviteTask(target: 5 | 10 | 25 | 100) {
     const res = await run(`invite:${target}`, () => api.claimInviteTask(target))
     if (!res) return 0
     state.value = res.state

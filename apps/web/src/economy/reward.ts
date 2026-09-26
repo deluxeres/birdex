@@ -25,7 +25,8 @@ export function effectiveStreakDay(state: RewardState, now: number): number {
   if (state.lastClaimAt === null) return 0
   const gap = daysBetween(dayKey(state.lastClaimAt), dayKey(now))
   if (gap > 1 && ECONOMY.rewardResetOnMiss) return 0
-  return state.streakDay
+  // Серия была длиннее (старый календарь на 30 дней) — продолжаем по кругу.
+  return state.streakDay % ECONOMY.rewardStreak.length
 }
 
 export function rewardAmount(day: number): number {

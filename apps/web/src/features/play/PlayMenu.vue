@@ -46,8 +46,12 @@ const cards = computed<Card[]>(() => [
     energy: game.modeEnergy('fox'), max: modeMax('fox'), cost: ECONOMY.modes.fox.playCost,
   },
   {
-    mode: 'run', color: '#5bd13a', img: ASSETS.modes.run,
+    mode: 'run', color: '#ffc629', img: ASSETS.modes.run,
     energy: game.modeEnergy('run'), max: modeMax('run'), cost: ECONOMY.modes.run.playCost,
+  },
+  {
+    mode: 'double', color: '#3ccf5a', img: ASSETS.modes.double,
+    energy: game.modeEnergy('double'), max: modeMax('double'), cost: ECONOMY.modes.double.playCost,
   },
   { mode: 'puzzle', color: '#3aa0ff', icon: '🧩', energy: 0, max: 200, cost: 20, locked: true },
   { mode: 'hunt', color: '#b05bff', icon: '🗺️', energy: 0, max: 150, cost: 30, locked: true },
@@ -134,7 +138,11 @@ function plus(c: Card) {
 
 <style scoped>
 .menu { position: relative; z-index: 1; gap: 10px; }
-.top { padding: 8px 14px; font-weight: 900; font-size: 16px; }
+.top {
+  padding: 8px 14px; font-weight: 900; font-size: 16px;
+  background: rgba(0, 0, 0, 0.42); border-color: rgba(214, 160, 70, 0.7); backdrop-filter: blur(2px);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
 .res { display: inline-flex; align-items: center; gap: 6px; }
 .head { text-align: center; margin: 6px 0 2px; }
 .head h1 { margin: 0; font-size: 34px; font-weight: 900; color: var(--warm-white); text-shadow: 0 3px 0 #6a3a16, 0 0 18px rgba(0, 0, 0, 0.6); }

@@ -16,7 +16,7 @@ import { t } from '@/i18n'
 const props = withDefaults(defineProps<{ mode?: PlayMode; color?: string }>(), { mode: 'catch', color: 'var(--gold)' })
 const game = useGameStore()
 
-const extra = computed(() => (props.mode === 'fox' || props.mode === 'run' ? props.mode : null))
+const extra = computed(() => (props.mode === 'fox' || props.mode === 'run' || props.mode === 'double' ? props.mode : null))
 const level = computed(() =>
   extra.value ? (game.state?.modeEnergy?.[extra.value]?.level ?? 0) : (game.state?.energyLevel ?? 0),
 )

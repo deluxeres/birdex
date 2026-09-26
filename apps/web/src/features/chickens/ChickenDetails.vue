@@ -13,6 +13,9 @@ import ChickenAvatar from '@/components/ChickenAvatar.vue'
 import EggIcon from '@/components/EggIcon.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
 import { t } from '@/i18n'
+import { playSound } from '@/services/audio'
+import { haptics } from '@/services/haptics'
+import { useShake } from '@/composables/useShake'
 
 const props = defineProps<{ chickenKey: string }>()
 const game = useGameStore()
@@ -26,6 +29,21 @@ const nextProd = computed(() => chickenProduction(props.chickenKey, level.value 
 const cost = computed(() => upgradeCost(props.chickenKey, level.value))
 const maxed = computed(() => isMaxLevel(props.chickenKey, level.value))
 const affordable = computed(() => (game.balance?.coins ?? 0) >= cost.value)
+const { shaking, shake } = useShake()
+
+/** Не хватает монет — ошибка и тряска кнопки, иначе улучшаем. */
+function upgrade() {
+  if (!owned.value || game.pending) return
+  if (!affordable.value) {
+    playSound('error', 0.7)
+    haptics.error()
+    ui.toast(t('errors.NOT_ENOUGH_COINS'), 'error')
+    shake()
+    return
+  }
+  game.upgradeChicken(owned.value.id)
+}
+
 const isDisplayed = computed(() => owned.value && owned.value.id === game.displayedChicken?.id)
 </script>
 
@@ -54,14 +72,16 @@ const isDisplayed = computed(() => owned.value && owned.value.id === game.displa
         <template v-if="!maxed">
           <div class="muted small">{{ t('chickens.upgradeCost') }}</div>
           <div class="val"><CoinIcon :size="18" /> {{ formatNumber(cost) }}</div>
-          <PrimaryButton
-            small
-            :disabled="!affordable"
-            :loading="game.pending === `upgrade:${owned.id}`"
-            @click="game.upgradeChicken(owned.id)"
+          <button
+            class="upg"
+            :class="{ poor: !affordable, busy: game.pending === `upgrade:${owned.id}`, 'shake-x': shaking }"
+            :style="{ backgroundImage: `url(${ASSETS.ui.upgradeBtn})` }"
+            @click="upgrade"
+            @animationend="shaking = false"
           >
-            ⬆ {{ t('chickens.upgrade') }}
-          </PrimaryButton>
+            <img :src="ASSETS.ui.upgradeArrow" alt="" draggable="false" />
+            <span>{{ t('chickens.upgrade') }}</span>
+          </button>
         </template>
         <div v-else class="val">{{ t('chickens.maxLevel') }}</div>
         <button v-if="!isDisplayed" class="link" @click="game.displayChicken(owned.id)">
@@ -77,6 +97,18 @@ const isDisplayed = computed(() => owned.value && owned.value.id === game.displa
 </template>
 
 <style scoped>
+/* Кнопка "Улучшить" — картинка ui/upgrade (пропорции 720×104). */
+.upg {
+  width: 100%; aspect-ratio: 720 / 104; min-height: 34px; margin: 2px 0;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  background: center / 100% 100% no-repeat; border-radius: 12px;
+  font-size: 15px; font-weight: 1000; color: #fff; text-shadow: 0 2px 0 #1d6a12, 0 0 4px rgba(0, 0, 0, 0.25);
+  transition: transform 0.08s, filter 0.15s;
+}
+.upg img { height: 58%; width: auto; filter: drop-shadow(0 2px 0 rgba(20, 80, 10, 0.8)); }
+.upg:active { transform: translateY(2px); }
+.upg.poor { filter: saturate(0.35) brightness(0.8); }
+.upg.busy { opacity: 0.7; pointer-events: none; }
 .mini-ico { width: 20px; height: 20px; object-fit: contain; vertical-align: -4px; }
 .details { display: flex; gap: 10px; padding: 12px; }
 .pic { flex: 0 0 130px; display: flex; align-items: flex-end; justify-content: center; }

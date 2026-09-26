@@ -13,6 +13,9 @@ export const CHICKEN_FLIGHT = {
   curvePower: 1.42,
   curveScale: 0.026,
   historyLimit: 8,
+  /** Каждый 5-й полёт с шансом 30% — мгновенный краш на 1.00x (всё сгорает). */
+  instantCrashEvery: 5,
+  instantCrashChance: 0.3,
   milestones: [
     { at: 2, label: 'BOOST!' },
     { at: 5, label: 'CLOUD BREAK!' },
@@ -51,4 +54,10 @@ export function randomCrashMultiplier(rand = Math.random()): number {
   const base = 1 / (1 - r * 0.965)
   const capped = Math.min(CHICKEN_FLIGHT.maxMultiplier, Math.max(1.08, base))
   return Math.floor(capped * 100) / 100
+}
+
+/** Множитель краша для полёта номер flightNumber (1, 2, 3…): каждый 5-й может сгореть сразу на 1.00x. */
+export function crashMultiplierForFlight(flightNumber: number, rand = Math.random, randInstant = Math.random): number {
+  if (flightNumber > 0 && flightNumber % CHICKEN_FLIGHT.instantCrashEvery === 0 && randInstant() < CHICKEN_FLIGHT.instantCrashChance) return 1
+  return randomCrashMultiplier(rand())
 }
